@@ -88,10 +88,16 @@
           <div class="title-bar"><span class="title-bar-text">How to Play</span></div>
           <div class="dialog-body">
             <p>
-              Take every city. Cities build units — click one of yours to choose what.
-              Click a unit to select it, then click where it should go. Armies capture
-              cities (about half of assaults succeed). Fighters fly anywhere but must
-              refuel at cities or Carriers. Armies board Transports to cross the sea.
+              Take every city. Cities build units — tap one of yours to choose what.
+              Tap a unit to select it (it stays highlighted); tap it again to deselect.
+              Tap another of your units to switch to it. With a unit selected, tap a
+              destination — a neighboring tile moves/attacks at once, a far tile sets a
+              path (drawn as a line) the unit follows over several turns. Units that
+              have finished acting this turn are dimmed. Armies capture cities (about
+              half of assaults succeed). Fighters fly anywhere but must refuel at cities
+              or Carriers. Armies board an adjacent Transport to cross the sea.
+              When several units share a tile it shows a count badge — tap it to
+              open a panel listing each unit's state and pick one.
             </p>
             <div class="help-table-wrap">
               <table id="help-units"></table>
@@ -106,6 +112,18 @@
             </p>
             <div class="dialog-actions">
               <button id="btn-close-help" type="button" class="default-btn">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="stack-dialog" class="hidden">
+        <div class="mac-window">
+          <div class="title-bar"><span class="title-bar-text" id="stack-title">Units Here</span></div>
+          <div class="dialog-body">
+            <div id="stack-list" class="stack-list"></div>
+            <div class="dialog-actions">
+              <button id="btn-close-stack" type="button" class="default-btn">Close</button>
             </div>
           </div>
         </div>

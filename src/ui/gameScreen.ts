@@ -80,6 +80,9 @@ export function createGameScreen(
   const productionDialog = el<HTMLDivElement>('production-dialog');
   const productionTitle = el<HTMLSpanElement>('production-title');
   const productionList = el<HTMLDivElement>('production-list');
+  const stackDialog = el<HTMLDivElement>('stack-dialog');
+  const stackTitle = el<HTMLSpanElement>('stack-title');
+  const stackList = el<HTMLDivElement>('stack-list');
   const victoryOverlay = el<HTMLDivElement>('victory-overlay');
   const victoryText = el<HTMLHeadingElement>('victory-text');
 
@@ -302,6 +305,92 @@ export function createGameScreen(
     productionDialog.classList.remove('hidden');
   }
 
+  // ---------- Stacked-units panel ----------
+
+  function unitStatusLine(u: ViewUnit): string {
+    const s = UNIT_SPECS[u.type];
+    const bits = [`moves ${u.movesLeft}/${s.moves}`, `hits ${u.hits}/${s.hits}`];
+    if (u.type === 'fighter') bits.push(`fuel ${u.fuel}`);
+    if (u.cargoCount > 0) bits.push(`carrying ${u.cargoCount}`);
+    if (u.aboard !== null) bits.push('aboard');
+    if (u.mode === 'sentry') bits.push('sentry');
+    else if (u.mode === 'moveto') bits.push('moving');
+    else if (u.movesLeft === 0) bits.push('done');
+    return bits.join(' · ');
+  }
+
+  /** Expanded view of every one of your units sharing a tile. */
+  function openStack(units: ViewUnit[]): void {
+    if (units.length === 0) return;
+    swallowNextClick();
+    stackTitle.textContent = `${units.length} Units Here`;
+    stackList.innerHTML = '';
+    for (const u of units) {
+      const spec = UNIT_SPECS[u.type];
+      const row = document.createElement('button');
+      row.className = 'stack-row' + (u.id === selectedId ? ' selected' : '');
+      row.type = 'button';
+
+      const glyph = document.createElement('span');
+      glyph.className = 'glyph';
+      glyph.style.background = u.owner === view!.you ? '#1d50d8' : '#cf2222';
+      glyph.textContent = spec.letter;
+
+      const info = document.createElement('span');
+      info.className = 'info';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = spec.name;
+      const status = document.createElement('div');
+      status.className = 'status';
+      status.textContent = unitStatusLine(u);
+      info.append(name, status);
+
+      const actions = document.createElement('span');
+      actions.className = 'row-actions';
+      if (myTurn() && u.aboard === null && u.movesLeft > 0) {
+        const sentry = document.createElement('button');
+        sentry.type = 'button';
+        sentry.textContent = 'Sentry';
+        sentry.addEventListener('click', (e) => {
+          e.stopPropagation();
+          session.send({ type: 'order', unitId: u.id, order: 'sentry' });
+          stackDialog.classList.add('hidden');
+        });
+        const skip = document.createElement('button');
+        skip.type = 'button';
+        skip.textContent = 'Skip';
+        skip.addEventListener('click', (e) => {
+          e.stopPropagation();
+          session.send({ type: 'order', unitId: u.id, order: 'skip' });
+          stackDialog.classList.add('hidden');
+        });
+        actions.append(sentry, skip);
+      }
+
+      row.append(glyph, info, actions);
+      row.addEventListener('click', () => {
+        selectedId = u.id;
+        stackDialog.classList.add('hidden');
+        const { w, h } = viewSize();
+        if (view !== null) centerOn(cam, view, w, h, u.x, u.y);
+        requestRender();
+      });
+      stackList.appendChild(row);
+    }
+    stackDialog.classList.remove('hidden');
+  }
+
+  /** Select a single unit, or open the stack panel when several share a tile. */
+  function selectOrStack(units: ViewUnit[]): void {
+    if (units.length === 1) {
+      selectedId = (units[0] as ViewUnit).id;
+      requestRender();
+    } else if (units.length > 1) {
+      openStack(units);
+    }
+  }
+
   // ---------- Pointer input: one finger pans/taps, two fingers pinch-zoom ----------
   const pointers = new Map<number, { x: number; y: number }>();
   let dragMoved = false;
@@ -317,25 +406,19 @@ export function createGameScreen(
     };
   }
 
+  /** Can the selected unit board this friendly transport/carrier? */
+  function canBoard(sel: ViewUnit, target: ViewUnit): boolean {
+    const cap = UNIT_SPECS[target.type].capacity;
+    return cap !== undefined && cap.type === sel.type && target.cargoCount < cap.count;
+  }
+
   function handleClick(e: PointerEvent): void {
     if (view === null) return;
     const tile = tileFromPointer(e);
     if (tile.x < 0 || tile.y < 0 || tile.x >= view.width || tile.y >= view.height) return;
 
-    const unit = selectedUnit();
-    // Order the selected unit.
-    if (unit !== undefined && myTurn() && !(unit.x === tile.x && unit.y === tile.y)) {
-      if (chebyshev(unit.x, unit.y, tile.x, tile.y) === 1) {
-        session.send({ type: 'move', unitId: unit.id, to: tile });
-      } else if (unit.aboard === null) {
-        session.send({ type: 'order', unitId: unit.id, order: { moveTo: tile } });
-        selectedId = null;
-      }
-      return;
-    }
-
-    // Select a unit / cycle through a stack.
-    const stack = view.units.filter(
+    // Your own units on the tapped tile, selectable in a stable order.
+    const surfaceHere = view.units.filter(
       (u) => u.owner === view!.you && u.aboard === null && u.x === tile.x && u.y === tile.y,
     );
     const cargoHere = view.units.filter(
@@ -346,27 +429,59 @@ export function createGameScreen(
         u.y === tile.y &&
         u.movesLeft > 0,
     );
-    const selectable = [...stack, ...cargoHere];
-    if (selectable.length > 0) {
-      const index = selectable.findIndex((u) => u.id === selectedId);
-      if (index >= 0 && index === selectable.length - 1) {
-        // Cycled past the end: fall through to the city, or wrap.
-        const city = view.yourCities.find((c) => c.x === tile.x && c.y === tile.y);
-        if (city !== undefined) {
-          selectedId = null;
-          openProduction(city.id);
-          requestRender();
-          return;
-        }
+    const selectableHere = [...surfaceHere, ...cargoHere];
+    const cityHere = view.yourCities.find((c) => c.x === tile.x && c.y === tile.y);
+    const sel = selectedUnit();
+
+    // 1) Tapping the selected unit's own tile. Several units here → open the
+    //    stack panel to inspect/switch. A lone selected unit → deselect (or
+    //    open the city menu if it sits on one).
+    if (sel !== undefined && sel.x === tile.x && sel.y === tile.y) {
+      if (selectableHere.length > 1) {
+        openStack(selectableHere);
+      } else if (cityHere !== undefined) {
+        selectedId = null;
+        openProduction(cityHere.id);
+      } else {
+        selectedId = null;
+        requestRender();
       }
-      selectedId = (selectable[(index + 1) % selectable.length] as ViewUnit).id;
-      requestRender();
       return;
     }
 
-    const city = view.yourCities.find((c) => c.x === tile.x && c.y === tile.y);
-    if (city !== undefined) {
-      openProduction(city.id);
+    // 2) A unit is selected and it's your turn: act on the tapped tile.
+    if (sel !== undefined && myTurn()) {
+      const boardTarget = selectableHere.find((u) => canBoard(sel, u));
+      // Adjacent tap = a direct action: attack, move, or board a neighbor.
+      if (
+        chebyshev(sel.x, sel.y, tile.x, tile.y) === 1 &&
+        (selectableHere.length === 0 || boardTarget !== undefined)
+      ) {
+        session.send({ type: 'move', unitId: sel.id, to: tile });
+        return;
+      }
+      // Tapping your own unit(s) selects/inspects instead of moving onto them.
+      // (This is the fix: selecting a new army no longer marches the old one.)
+      if (selectableHere.length > 0) {
+        selectOrStack(selectableHere);
+        return;
+      }
+      // Empty distant tile = a standing move order; keep the unit selected so
+      // its planned path stays visible and can be retargeted.
+      if (sel.aboard === null) {
+        session.send({ type: 'order', unitId: sel.id, order: { moveTo: tile } });
+        return;
+      }
+    }
+
+    // 3) Nothing actionable selected: select a unit here (or the stack panel
+    //    for several), or open a city.
+    if (selectableHere.length > 0) {
+      selectOrStack(selectableHere);
+      return;
+    }
+    if (cityHere !== undefined) {
+      openProduction(cityHere.id);
       return;
     }
     selectedId = null;
@@ -516,6 +631,7 @@ export function createGameScreen(
         case 'Escape':
           selectedId = null;
           productionDialog.classList.add('hidden');
+          stackDialog.classList.add('hidden');
           requestRender();
           break;
       }
@@ -580,6 +696,11 @@ export function createGameScreen(
   el<HTMLButtonElement>('btn-close-production').addEventListener(
     'click',
     () => productionDialog.classList.add('hidden'),
+    { signal },
+  );
+  el<HTMLButtonElement>('btn-close-stack').addEventListener(
+    'click',
+    () => stackDialog.classList.add('hidden'),
     { signal },
   );
   el<HTMLButtonElement>('btn-victory-menu').addEventListener(
@@ -662,6 +783,7 @@ export function createGameScreen(
       session.dispose();
       unitPanel.classList.add('hidden');
       productionDialog.classList.add('hidden');
+      stackDialog.classList.add('hidden');
       victoryOverlay.classList.add('hidden');
       chatWindow.classList.add('hidden');
       toasts.innerHTML = '';

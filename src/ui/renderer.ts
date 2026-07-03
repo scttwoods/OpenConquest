@@ -283,17 +283,8 @@ export function renderGame(
     drawCity(ctx, screenX(city.x), screenY(city.y), ts, city.owner, view.you);
   }
 
-  // Own units draw last so yours are always visible on contested tiles.
-  const sorted = [...view.units].sort(
-    (a, b) => Number(a.owner === view.you) - Number(b.owner === view.you),
-  );
-  for (const unit of sorted) {
-    if (unit.aboard !== null) continue;
-    if (unit.x < x0 || unit.x > x1 || unit.y < y0 || unit.y > y1) continue;
-    drawUnit(ctx, screenX(unit.x), screenY(unit.y), ts, unit, view.you, unit.id === selectedUnitId);
-  }
-
-  // Dim what is remembered but not currently visible (stale intel).
+  // Dim what is remembered but not currently visible (stale intel) — done
+  // before units/paths so those stay crisp on top.
   ctx.fillStyle = PALETTE.fogRemembered;
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
@@ -303,18 +294,89 @@ export function renderGame(
     }
   }
 
-  // Destination marker for the selected unit's standing order.
-  const selected = view.units.find((u) => u.id === selectedUnitId);
-  if (selected !== undefined && selected.dest !== null) {
-    const px = screenX(selected.dest.x);
-    const py = screenY(selected.dest.y);
-    ctx.strokeStyle = PALETTE.selection;
-    ctx.lineWidth = 2;
+  // Planned-path lines: for every unit of yours with a standing move order,
+  // draw a line from the unit to its destination. The selected unit's path is
+  // bold and yellow; others are faint.
+  const center = (n: number, screen: (v: number) => number): number => screen(n) + ts / 2;
+  for (const unit of view.units) {
+    if (unit.owner !== view.you || unit.dest === null || unit.aboard !== null) continue;
+    const fromX = center(unit.x, screenX);
+    const fromY = center(unit.y, screenY);
+    const toX = center(unit.dest.x, screenX);
+    const toY = center(unit.dest.y, screenY);
+    const isSel = unit.id === selectedUnitId;
+
+    // Dark halo underneath for contrast on any terrain.
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = (isSel ? 4 : 3) + 2;
+    ctx.setLineDash(isSel ? [] : [ts * 0.3, ts * 0.25]);
     ctx.beginPath();
-    ctx.moveTo(px + 3, py + 3);
-    ctx.lineTo(px + ts - 3, py + ts - 3);
-    ctx.moveTo(px + ts - 3, py + 3);
-    ctx.lineTo(px + 3, py + ts - 3);
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
     ctx.stroke();
+
+    ctx.strokeStyle = isSel ? PALETTE.selection : 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = isSel ? 3 : 2;
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Destination pin.
+    const r = Math.max(3, ts * 0.18);
+    ctx.fillStyle = isSel ? PALETTE.selection : 'rgba(255,255,255,0.85)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(toX, toY, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // How many surface units share each tile (for the stack badge).
+  const stackCounts = new Map<number, number>();
+  for (const unit of view.units) {
+    if (unit.aboard !== null) continue;
+    const key = tileIndex(unit.x, unit.y, view.width);
+    stackCounts.set(key, (stackCounts.get(key) ?? 0) + 1);
+  }
+
+  // Own units draw last so yours are always visible on contested tiles.
+  // Units that have finished acting this turn (no moves left, or on sentry /
+  // committed to a move order) are dimmed; the selected unit never dims.
+  const sorted = [...view.units].sort(
+    (a, b) => Number(a.owner === view.you) - Number(b.owner === view.you),
+  );
+  const badgedTiles = new Set<number>();
+  for (const unit of sorted) {
+    if (unit.aboard !== null) continue;
+    if (unit.x < x0 || unit.x > x1 || unit.y < y0 || unit.y > y1) continue;
+    const isSel = unit.id === selectedUnitId;
+    const done =
+      unit.owner === view.you && !isSel && !(unit.movesLeft > 0 && unit.mode === 'awake');
+    ctx.globalAlpha = done ? 0.5 : 1;
+    drawUnit(ctx, screenX(unit.x), screenY(unit.y), ts, unit, view.you, isSel);
+    ctx.globalAlpha = 1;
+
+    // Stack badge (top-left): drawn once per multi-unit tile.
+    const key = tileIndex(unit.x, unit.y, view.width);
+    const count = stackCounts.get(key) ?? 1;
+    if (count > 1 && !badgedTiles.has(key) && ts >= 12) {
+      badgedTiles.add(key);
+      const px = screenX(unit.x);
+      const py = screenY(unit.y);
+      const badge = Math.max(9, Math.round(ts * 0.42));
+      ctx.fillStyle = PALETTE.selection;
+      ctx.fillRect(px, py, badge, badge);
+      ctx.strokeStyle = PALETTE.outline;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px + 0.5, py + 0.5, badge - 1, badge - 1);
+      ctx.fillStyle = PALETTE.outline;
+      ctx.font = `bold ${badge - 3}px "Courier New", monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${count}`, px + badge / 2, py + badge / 2 + 1);
+    }
   }
 }

@@ -242,6 +242,7 @@ fieldset.field legend {
 #pvp-dialog,
 #help-dialog,
 #production-dialog,
+#stack-dialog,
 #victory-overlay {
   position: absolute;
   inset: 0;
@@ -299,6 +300,93 @@ fieldset.field legend {
 .production-list button:hover {
   background: var(--ink);
   color: var(--paper);
+}
+
+/* --- Stacked-units panel --- */
+
+.stack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 300px;
+  max-width: 92vw;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.stack-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 2px solid var(--ink);
+  padding: 6px 10px;
+  background: var(--paper);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.stack-row:hover,
+.stack-row.selected {
+  background: #fffbe0;
+}
+
+.stack-row .glyph {
+  flex: 0 0 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: bold;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+}
+
+.stack-row .info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.stack-row .info .name {
+  font-weight: bold;
+}
+
+.stack-row .info .status {
+  font-size: 11px;
+  color: #444;
+}
+
+.stack-row .row-actions {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.stack-row .row-actions button {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.stack-row .row-actions button:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+@media (pointer: coarse) {
+  .stack-row {
+    min-height: 46px;
+  }
+  .stack-row .row-actions button {
+    min-height: 38px;
+    font-size: 12px;
+  }
 }
 
 #pvp-menu hr {
