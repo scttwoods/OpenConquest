@@ -1,11 +1,9 @@
 # Fly.io app config. One always-on machine (see PLAN.md §5).
 #
-# One-time setup on a new Fly account:
-#   fly launch --no-deploy     # creates the app; keep this file when prompted
-#   fly volumes create games_data --size 1   # persistent storage for PvP saves
-#   fly deploy
-# Then add FLY_API_TOKEN (from `fly tokens create deploy`) as a GitHub repo
-# secret so .github/workflows/deploy.yml can deploy on push to main.
+# If the app was created via Fly's "Launch from GitHub" flow, deploys happen
+# automatically on push to the configured branch. Otherwise, add FLY_API_TOKEN
+# (from `fly tokens create deploy`) as a GitHub repo secret so
+# .github/workflows/deploy.yml can deploy on push to main.
 
 app = "openconquest"
 primary_region = "sjc"
@@ -23,6 +21,9 @@ primary_region = "sjc"
   size = "shared-cpu-1x"
   memory = "512mb"
 
-[mounts]
-  source = "games_data"
-  destination = "/data"
+# Phase 5 (online PvP) will add a persistent volume for saved games:
+#   fly volumes create games_data --size 1
+# and then re-add:
+# [mounts]
+#   source = "games_data"
+#   destination = "/data"
