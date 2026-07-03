@@ -14,6 +14,9 @@ export interface Rng {
   chance(p: number): boolean;
   /** Uniformly chosen element; throws on an empty array. */
   pick<T>(items: readonly T[]): T;
+  /** Internal state, for save/load. */
+  getState(): number;
+  setState(state: number): void;
 }
 
 export function createRng(seed: number): Rng {
@@ -40,6 +43,12 @@ export function createRng(seed: number): Rng {
         throw new Error('Rng.pick on empty array');
       }
       return items[Math.floor(next() * items.length)] as T;
+    },
+    getState(): number {
+      return a;
+    },
+    setState(state: number): void {
+      a = state >>> 0;
     },
   };
 }

@@ -3,6 +3,18 @@ import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
+import type { ClientMessage } from '../src/session/protocol';
+import {
+  createConnection,
+  handleChat,
+  handleCommand,
+  handleCreate,
+  handleDisconnect,
+  handleGetView,
+  handleJoin,
+  handleReconnect,
+  restoreRooms,
+} from './rooms';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -19,13 +31,49 @@ await app.register(fastifyWebsocket);
 
 app.get('/health', () => ({ status: 'ok', service: 'openconquest' }));
 
-// Phase 0: a plain echo endpoint proving WebSockets work end-to-end through
-// dev proxy / Docker / Fly. Phase 5 replaces this with the game-room protocol.
 app.register(async (instance) => {
   instance.get('/ws', { websocket: true }, (socket) => {
+    const conn = createConnection();
     socket.on('message', (raw: Buffer) => {
-      socket.send(`echo: ${raw.toString()}`);
+      let message: ClientMessage;
+      try {
+        message = JSON.parse(raw.toString()) as ClientMessage;
+      } catch {
+        socket.send(JSON.stringify({ t: 'error', message: 'Bad message' }));
+        return;
+      }
+      try {
+        switch (message.t) {
+          case 'echo':
+            socket.send(JSON.stringify({ t: 'echo', payload: message.payload ?? null }));
+            break;
+          case 'create':
+            handleCreate(conn, socket, message.sizeKey);
+            break;
+          case 'join':
+            handleJoin(conn, socket, message.code);
+            break;
+          case 'reconnect':
+            handleReconnect(conn, socket, message.code, message.token);
+            break;
+          case 'command':
+            handleCommand(conn, socket, message.command);
+            break;
+          case 'chat':
+            handleChat(conn, String(message.text ?? ''));
+            break;
+          case 'getView':
+            handleGetView(conn);
+            break;
+          default:
+            socket.send(JSON.stringify({ t: 'error', message: 'Unknown message type' }));
+        }
+      } catch (err) {
+        app.log.error(err);
+        socket.send(JSON.stringify({ t: 'error', message: 'Server error' }));
+      }
     });
+    socket.on('close', () => handleDisconnect(conn));
   });
 });
 
@@ -38,6 +86,9 @@ app.setNotFoundHandler((request, reply) => {
   }
   return reply.code(404).send({ error: 'not found' });
 });
+
+const restored = restoreRooms();
+app.log.info(`restored ${restored} saved game(s)`);
 
 try {
   await app.listen({ port: PORT, host: HOST });

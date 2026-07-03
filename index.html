@@ -17,9 +17,10 @@
             <h1>OpenConquest</h1>
             <p class="tagline">Explore. Produce. Conquer.</p>
             <div class="menu-buttons">
+              <button id="btn-continue" type="button" class="hidden">Continue Game</button>
               <button id="btn-vs-computer" type="button">vs Computer</button>
               <button id="btn-pvp" type="button">Online PvP</button>
-              <button id="btn-conn-test" type="button">Test Connection</button>
+              <button id="btn-help" type="button">How to Play</button>
             </div>
             <p id="status-line" role="status">&nbsp;</p>
           </div>
@@ -48,14 +49,107 @@
         </div>
       </div>
 
+      <div id="pvp-dialog" class="hidden">
+        <div class="mac-window">
+          <div class="title-bar"><span class="title-bar-text">Online PvP</span></div>
+          <div class="dialog-body">
+            <div id="pvp-menu">
+              <fieldset class="field">
+                <legend>Map size</legend>
+                <label><input type="radio" name="pvp-map-size" value="small" /> Small</label>
+                <label><input type="radio" name="pvp-map-size" value="medium" checked /> Medium</label>
+                <label><input type="radio" name="pvp-map-size" value="large" /> Large</label>
+              </fieldset>
+              <div class="dialog-actions">
+                <button id="btn-pvp-create" type="button" class="default-btn">Create Game</button>
+              </div>
+              <hr />
+              <label class="field">
+                <span>Code</span>
+                <input id="input-join-code" type="text" placeholder="e.g. K7KMQ3" autocomplete="off" maxlength="6" />
+                <button id="btn-pvp-join" type="button">Join</button>
+              </label>
+              <div class="dialog-actions">
+                <button id="btn-pvp-resume" type="button" class="hidden">Resume Last Game</button>
+                <button id="btn-pvp-cancel" type="button">Cancel</button>
+              </div>
+              <p id="pvp-status" role="status">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="help-dialog" class="hidden">
+        <div class="mac-window help-window">
+          <div class="title-bar"><span class="title-bar-text">How to Play</span></div>
+          <div class="dialog-body">
+            <p>
+              Take every city. Cities build units — click one of yours to choose what.
+              Click a unit to select it, then click where it should go. Armies capture
+              cities (about half of assaults succeed). Fighters fly anywhere but must
+              refuel at cities or Carriers. Armies board Transports to cross the sea.
+            </p>
+            <div class="help-table-wrap">
+              <table id="help-units"></table>
+            </div>
+            <p class="help-keys">
+              <b>n</b> next unit · <b>space</b> skip · <b>s</b> sentry · <b>Enter</b> end turn ·
+              <b>Esc</b> deselect · drag/arrows pan · wheel zoom · click minimap to jump
+            </p>
+            <div class="dialog-actions">
+              <button id="btn-close-help" type="button" class="default-btn">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="production-dialog" class="hidden">
+        <div class="mac-window">
+          <div class="title-bar"><span class="title-bar-text" id="production-title">City</span></div>
+          <div class="dialog-body">
+            <div id="production-list" class="production-list"></div>
+            <div class="dialog-actions">
+              <button id="btn-close-production" type="button">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="victory-overlay" class="hidden">
+        <div class="mac-window">
+          <div class="title-bar"><span class="title-bar-text">Game Over</span></div>
+          <div class="title-body">
+            <h1 id="victory-text">Victory!</h1>
+            <div class="menu-buttons">
+              <button id="btn-victory-menu" type="button">Back to Menu</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="hud" class="hidden">
         <span id="hud-text"></span>
+        <button id="btn-next-unit" type="button">Next Unit</button>
+        <button id="btn-end-turn" type="button">End Turn</button>
+        <button id="btn-mute" type="button">Sound</button>
         <button id="btn-menu" type="button">Menu</button>
       </div>
+
+      <div id="unit-panel" class="hidden">
+        <span id="unit-panel-text"></span>
+      </div>
+
+      <div id="toasts"></div>
 
       <div id="minimap-window" class="mac-window hidden">
         <div class="title-bar"><span class="title-bar-text">Map</span></div>
         <canvas id="minimap" width="220" height="140"></canvas>
+      </div>
+
+      <div id="chat-window" class="mac-window hidden">
+        <div class="title-bar"><span class="title-bar-text">Chat</span></div>
+        <div id="chat-log"></div>
+        <input id="chat-input" type="text" placeholder="message…" autocomplete="off" />
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

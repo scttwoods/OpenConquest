@@ -1,4 +1,4 @@
-import type { World } from '../core/mapgen';
+type WorldSize = { width: number; height: number };
 
 /** Viewport onto the world. x/y are the top-left corner in world pixels. */
 export interface Camera {
@@ -16,7 +16,7 @@ export function createCamera(): Camera {
 }
 
 /** Keep the viewport inside the world (centering when the world is smaller). */
-export function clampCamera(cam: Camera, world: World, viewW: number, viewH: number): void {
+export function clampCamera(cam: Camera, world: WorldSize, viewW: number, viewH: number): void {
   const worldW = world.width * cam.tileSize;
   const worldH = world.height * cam.tileSize;
   cam.x = worldW <= viewW ? (worldW - viewW) / 2 : Math.min(Math.max(cam.x, 0), worldW - viewW);
@@ -25,7 +25,7 @@ export function clampCamera(cam: Camera, world: World, viewW: number, viewH: num
 
 export function centerOn(
   cam: Camera,
-  world: World,
+  world: WorldSize,
   viewW: number,
   viewH: number,
   tileX: number,
@@ -39,7 +39,7 @@ export function centerOn(
 /** Zoom one step in (+1) or out (-1), keeping the pixel under the cursor fixed. */
 export function zoomAt(
   cam: Camera,
-  world: World,
+  world: WorldSize,
   viewW: number,
   viewH: number,
   direction: 1 | -1,

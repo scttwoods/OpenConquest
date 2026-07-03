@@ -25,3 +25,130 @@ export const MIN_CITY_CONTINENT = 15;
 
 /** Vision radius (Chebyshev) granted by a city. */
 export const VISION_CITY = 2;
+
+/** Chance an army's assault on a city succeeds (per attempt). */
+export const CITY_CAPTURE_CHANCE = 0.5;
+
+/** Chance the attacker wins each combat round. */
+export const COMBAT_ROUND_CHANCE = 0.5;
+
+export type UnitDomain = 'land' | 'sea' | 'air';
+
+export interface UnitSpec {
+  name: string;
+  /** Map glyph. */
+  letter: string;
+  domain: UnitDomain;
+  moves: number;
+  hits: number;
+  buildTime: number;
+  vision: number;
+  /** Damage dealt per combat round won. */
+  damage: number;
+  /** Fighters only: total moves before needing to land. */
+  fuel?: number;
+  /** Transports carry armies, carriers carry fighters. */
+  capacity?: { type: 'army' | 'fighter'; count: number };
+}
+
+export const UNIT_TYPES = [
+  'army',
+  'fighter',
+  'transport',
+  'destroyer',
+  'submarine',
+  'cruiser',
+  'carrier',
+  'battleship',
+] as const;
+
+export type UnitType = (typeof UNIT_TYPES)[number];
+
+export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
+  army: {
+    name: 'Army',
+    letter: 'A',
+    domain: 'land',
+    moves: 1,
+    hits: 1,
+    buildTime: 5,
+    vision: 1,
+    damage: 1,
+  },
+  fighter: {
+    name: 'Fighter',
+    letter: 'F',
+    domain: 'air',
+    moves: 4,
+    hits: 1,
+    buildTime: 8,
+    vision: 2,
+    damage: 1,
+    fuel: 20,
+  },
+  transport: {
+    name: 'Transport',
+    letter: 'T',
+    domain: 'sea',
+    moves: 2,
+    hits: 1,
+    buildTime: 15,
+    vision: 1,
+    damage: 1,
+    capacity: { type: 'army', count: 6 },
+  },
+  destroyer: {
+    name: 'Destroyer',
+    letter: 'D',
+    domain: 'sea',
+    moves: 3,
+    hits: 1,
+    buildTime: 15,
+    vision: 1,
+    damage: 1,
+  },
+  submarine: {
+    name: 'Submarine',
+    letter: 'S',
+    domain: 'sea',
+    moves: 2,
+    hits: 1,
+    buildTime: 18,
+    vision: 1,
+    damage: 2,
+  },
+  cruiser: {
+    name: 'Cruiser',
+    letter: 'R',
+    domain: 'sea',
+    moves: 2,
+    hits: 2,
+    buildTime: 30,
+    vision: 1,
+    damage: 1,
+  },
+  carrier: {
+    name: 'Carrier',
+    letter: 'C',
+    domain: 'sea',
+    moves: 2,
+    hits: 2,
+    buildTime: 36,
+    vision: 1,
+    damage: 1,
+    capacity: { type: 'fighter', count: 8 },
+  },
+  battleship: {
+    name: 'Battleship',
+    letter: 'B',
+    domain: 'sea',
+    moves: 2,
+    hits: 3,
+    buildTime: 45,
+    vision: 1,
+    damage: 1,
+  },
+};
+
+/** Enemy submarines are only spotted this close to one of your vision sources. */
+export const SUB_DETECTION_RADIUS = 1;

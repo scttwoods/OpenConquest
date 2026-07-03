@@ -222,6 +222,146 @@ fieldset.field legend {
   color: var(--paper);
 }
 
+/* --- Dialog layers share centering --- */
+
+#pvp-dialog,
+#help-dialog,
+#production-dialog,
+#victory-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.5);
+  z-index: 20;
+}
+
+.help-window {
+  max-width: 560px;
+}
+
+.help-table-wrap {
+  overflow-x: auto;
+  border: 2px solid var(--ink);
+}
+
+#help-units {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+
+#help-units th,
+#help-units td {
+  border: 1px solid var(--ink);
+  padding: 3px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.help-keys {
+  font-size: 12px;
+}
+
+.production-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.production-list button {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 5px 12px;
+  text-align: left;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  cursor: pointer;
+}
+
+.production-list button:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+#pvp-menu hr {
+  border: none;
+  border-top: 2px solid var(--ink);
+  margin: 12px 0;
+}
+
+#pvp-status {
+  font-size: 12px;
+  min-height: 1.2em;
+  margin-top: 8px;
+}
+
+/* --- Unit panel --- */
+
+#unit-panel {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 6px 12px;
+  font-size: 13px;
+  z-index: 5;
+}
+
+/* --- Toasts --- */
+
+#toasts {
+  position: absolute;
+  top: 60px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 15;
+  pointer-events: none;
+  max-width: 320px;
+}
+
+.toast {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* --- Chat --- */
+
+#chat-window {
+  position: absolute;
+  left: 10px;
+  bottom: 60px;
+  width: 240px;
+  min-width: 0;
+  z-index: 5;
+}
+
+#chat-log {
+  height: 110px;
+  overflow-y: auto;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+#chat-input {
+  width: 100%;
+  border: none;
+  border-top: 2px solid var(--ink);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
 /* --- Minimap --- */
 
 #minimap-window {

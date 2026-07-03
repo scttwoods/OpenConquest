@@ -4,6 +4,25 @@ A web homage to the classic Macintosh strategy game of exploration, production,
 and conquest. Play against the computer in your browser, or online against
 another human. See [PLAN.md](PLAN.md) for the full design and roadmap.
 
+## How to play
+
+Take every city. Cities build units (click one of yours to choose what to
+build). Click a unit, then click where it should go — distant tiles become
+standing orders that continue across turns. Armies capture cities (roughly half
+of assaults succeed); Fighters fly anywhere but must land at cities or Carriers
+before their fuel (20 moves) runs out; Armies board Transports to invade across
+the sea. Keys: `n` next unit · `space` skip · `s` sentry · `Enter` end turn ·
+`Esc` deselect · arrows pan · wheel zoom.
+
+**Online PvP:** one player creates a game and shares the 6-letter code; the
+other joins with it. The server is authoritative and each player only ever
+receives their own fogged view, so nobody can peek. Close the tab anytime — the
+game lives on the server and *Resume Last Game* picks your seat back up.
+
+**To make PvP games survive server deploys** (one-time, on Fly.io):
+`fly volumes create games_data --size 1`, then uncomment the `[mounts]` section
+in `fly.toml` and deploy.
+
 ## Development
 
 Requires Node 22+.

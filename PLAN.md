@@ -309,9 +309,11 @@ Node container — moving to Render/Railway/a VPS later is a 30-minute job.
       (code complete & verified locally; Fly app creation + FLY_API_TOKEN secret
       are the remaining one-time manual steps — see README)
 - [x] Phase 1 — Map generation, rendering, fog of war
-- [ ] Phase 2 — Armies, cities, combat, capture (first playable)
-- [ ] Phase 3 — Navy & air force
-- [ ] Phase 4 — AI opponent
-- [ ] Phase 5 — Online PvP over WebSockets
-- [ ] Phase 6 — Retro UI polish, sound, save/load
-- [ ] Phase 7 — Ship it & extras
+- [x] Phase 2 — Armies, cities, combat, capture (first playable)
+- [x] Phase 3 — Navy & air force
+- [x] Phase 4 — AI opponent
+- [x] Phase 5 — Online PvP over WebSockets
+- [x] Phase 6 — Retro UI polish, sound, save/load
+- [ ] Phase 7 — Ship it & extras (deployed via Fly GitHub integration;
+      remaining: create the games_data volume + re-add [mounts] in fly.toml
+      so PvP games survive deploys, then playtest with Dad)
