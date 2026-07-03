@@ -19,9 +19,9 @@ other joins with it. The server is authoritative and each player only ever
 receives their own fogged view, so nobody can peek. Close the tab anytime — the
 game lives on the server and *Resume Last Game* picks your seat back up.
 
-**To make PvP games survive server deploys** (one-time, on Fly.io):
-`fly volumes create games_data --size 1`, then uncomment the `[mounts]` section
-in `fly.toml` and deploy.
+PvP games persist to the `games_data` volume mounted at `/data`, so they
+survive restarts and deploys. Finished games are deleted; idle games expire
+after 30 days.
 
 ## Development
 

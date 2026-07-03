@@ -314,6 +314,6 @@ Node container — moving to Render/Railway/a VPS later is a 30-minute job.
 - [x] Phase 4 — AI opponent
 - [x] Phase 5 — Online PvP over WebSockets
 - [x] Phase 6 — Retro UI polish, sound, save/load
-- [ ] Phase 7 — Ship it & extras (deployed via Fly GitHub integration;
-      remaining: create the games_data volume + re-add [mounts] in fly.toml
-      so PvP games survive deploys, then playtest with Dad)
+- [x] Phase 7 — Ship it (deployed via Fly GitHub integration; games_data
+      volume mounted at /data for PvP persistence). Remaining fun: playtest
+      with Dad; extras (hotseat, replays, map editor) as desired.

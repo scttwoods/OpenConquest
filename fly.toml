@@ -21,9 +21,9 @@ primary_region = "sjc"
   size = "shared-cpu-1x"
   memory = "512mb"
 
-# Phase 5 (online PvP) will add a persistent volume for saved games:
-#   fly volumes create games_data --size 1
-# and then re-add:
-# [mounts]
-#   source = "games_data"
-#   destination = "/data"
+# Persistent volume for saved PvP games (the server writes /data/rooms/*.json).
+# The volume was created when the app was launched; this mount must stay
+# declared or non-interactive deploys refuse to proceed.
+[mounts]
+  source = "games_data"
+  destination = "/data"
