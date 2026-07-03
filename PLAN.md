@@ -171,8 +171,8 @@ friendly city.
 - Minimal `server/`: Fastify serving `dist/` + a `/health` route + a `/ws` echo
   endpoint (proves WebSockets work end-to-end before any game code exists).
 - Dev ergonomics: `npm run dev` runs Vite + server concurrently, Vite proxies `/ws`.
-- `Dockerfile` (multi-stage: build client, run server) + `fly.toml` with
-  `auto_stop_machines = true`, `auto_start_machines = true`, `min_machines_running = 0`.
+- `Dockerfile` (multi-stage: build client, run server) + `fly.toml` with one
+  always-on machine (`min_machines_running = 1`; see §5).
 - GitHub Actions workflow: on push to `main`, `flyctl deploy` (needs a
   `FLY_API_TOKEN` repo secret — one-time manual step, see §5).
 - Placeholder canvas rendering a checkerboard + title screen with the two mode
@@ -266,38 +266,30 @@ Priority-driven, per-city + per-unit heuristics (this is how the original felt):
 
 ---
 
-## 5. Hosting: Fly.io (and honest cost notes)
+## 5. Hosting: Fly.io (budget: up to $20/month — we'll use a fraction of it)
 
-**Primary: Fly.io** — one app runs the Node server, which serves both the static
+**Fly.io, one always-on app** runs the Node server, which serves both the static
 client and the PvP WebSockets. Long-lived WebSocket connections work natively
-(no serverless timeout games), and a 256 MB shared-CPU machine is far more than
-this game needs.
+(no serverless timeout games).
 
-- **Cost reality:** Fly.io no longer has a free tier for new accounts — it's
-  pay-as-you-go. But with `auto_stop_machines`/`auto_start_machines` and
-  `min_machines_running = 0`, the machine **stops when nobody is connected and
-  cold-starts in ~1 second when someone opens the URL**. A machine that only runs
-  during your evening games with Dad costs cents per month; a small persistent
-  volume for saved games adds a few cents more. Budget: well under $1–2/month in
-  practice. (Verify current pricing at fly.io/docs/about/pricing when implementing.)
+- **Configuration:** one `shared-cpu-1x` machine with 512 MB RAM, always on
+  (`min_machines_running = 1`, no auto-stop), plus a 1 GB volume for saved games.
+  **Expected bill: roughly $4–6/month** — well inside budget, and it buys real
+  quality-of-life: the site loads instantly every time, WebSocket connections
+  never die to an idling machine, and in-memory games never juggle restarts
+  outside of deploys. (Verify current pricing at fly.io/docs/about/pricing when
+  implementing; Fly bills pay-as-you-go, no free tier for new accounts.)
 - One-time manual setup: install `flyctl`, `fly launch` (creates the app +
   `fly.toml`), `fly volumes create games_data -s 1`, and add a `FLY_API_TOKEN`
   secret to the GitHub repo so Actions can deploy.
-- Auto-stop caveat: stopping machines kills in-memory state — which is exactly why
-  Phase 5 snapshots every game to the volume at each turn end, and clients
-  auto-reconnect/resync. Design for it and the auto-stop is free money.
+- Still snapshot every game to the volume at each turn end — deploys restart the
+  machine, and clients should auto-reconnect/resync through them invisibly.
+- **Optional, fits the budget:** a custom domain (~$10–12/year at a registrar,
+  i.e. ~$1/month) pointed at the app — `fly certs add yourdomain.com` gives you
+  free automatic TLS. Nicer to text Dad than `something.fly.dev`.
 
-**Strictly-$0 alternative:** **Render.com free tier** runs the identical Node +
-WebSocket app for nothing. Trade-off: free services sleep after 15 min idle and
-cold-start in ~30–60 s (fine if you text Dad "game's booting"), and the free disk
-is ephemeral — so point `store.ts` at a free external store (e.g. Turso/Neon free
-tier) or accept losing unfinished games on redeploys. The code is identical either
-way — it's just where the container runs, so switching later is a 30-minute job.
-
-Also fine: **Railway** (usage-based, ~$1/mo at this scale, $5 credit granted
-monthly on the Hobby trial), or a free **Oracle Cloud** VM if you enjoy sysadmin.
-Cloudflare Workers + Durable Objects can do this on their free tier too, but the
-programming model diverges from plain Node — not worth it for v1.
+If the bill ever matters less than expected fun, everything here is one plain
+Node container — moving to Render/Railway/a VPS later is a 30-minute job.
 
 ---
 
