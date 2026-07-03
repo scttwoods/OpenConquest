@@ -175,7 +175,7 @@ function buildHelpTable(): void {
     '<tr><th>Unit</th><th>Key</th><th>Moves</th><th>Hits</th><th>Build</th><th>Notes</th></tr>';
   const notes: Record<string, string> = {
     army: 'Captures cities; rides Transports',
-    fighter: 'Fuel 20; lands at cities/Carriers',
+    fighter: `Fuel ${UNIT_SPECS.fighter.fuel} (range ~${Math.floor((UNIT_SPECS.fighter.fuel ?? 0) / 2)}); lands at cities/Carriers`,
     transport: 'Carries 6 Armies',
     destroyer: 'Fast escort',
     submarine: 'Stealthy; hits ships for 2',

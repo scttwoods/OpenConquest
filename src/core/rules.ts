@@ -82,9 +82,12 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     moves: 4,
     hits: 1,
     buildTime: 8,
-    vision: 2,
+    vision: 3,
     damage: 1,
-    fuel: 20,
+    // Fuel is a there-and-back move budget, so combat radius is ~fuel/2 tiles.
+    // 40 gives a ~20-tile radius (10 turns aloft) — a real long-range scout /
+    // interceptor. Carriers refuel it to extend reach across oceans.
+    fuel: 40,
   },
   transport: {
     name: 'Transport',
