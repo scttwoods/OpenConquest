@@ -4,6 +4,7 @@ import { tileIndex } from '../core/grid';
 import { NEUTRAL } from '../core/state';
 import type { PlayerView } from '../core/view';
 import type { Camera } from './camera';
+import { PALETTE } from './renderer';
 
 export interface MinimapLayout {
   scale: number;
@@ -43,38 +44,32 @@ export function renderMinimap(
     for (let x = 0; x < view.width; x++) {
       const i = tileIndex(x, y, view.width);
       if (view.fog[i] === FOG_UNSEEN) continue;
-      ctx.fillStyle = view.terrain[i] === TERRAIN_LAND ? '#888' : '#fff';
+      ctx.fillStyle = view.terrain[i] === TERRAIN_LAND ? PALETTE.land : PALETTE.sea;
       ctx.fillRect(offsetX + x * scale, offsetY + y * scale, cell, cell);
     }
   }
 
-  // Known cities: yours solid black, enemy black with white core, neutral small.
+  // Known cities as owner-colored dots with a white halo.
   for (const city of view.cities) {
     const cx = offsetX + (city.x + 0.5) * scale;
     const cy = offsetY + (city.y + 0.5) * scale;
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = PALETTE.white;
     ctx.fillRect(cx - 2.5, cy - 2.5, 5, 5);
-    ctx.fillStyle = '#000';
-    if (city.owner === NEUTRAL) {
-      ctx.fillRect(cx - 1, cy - 1, 2, 2);
-    } else if (city.owner === view.you) {
-      ctx.fillRect(cx - 2, cy - 2, 4, 4);
-    } else {
-      ctx.fillRect(cx - 2, cy - 2, 4, 4);
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(cx - 0.5, cy - 0.5, 1, 1);
-    }
+    ctx.fillStyle =
+      city.owner === NEUTRAL
+        ? PALETTE.neutral
+        : city.owner === view.you
+          ? PALETTE.you
+          : PALETTE.enemy;
+    ctx.fillRect(cx - 1.5, cy - 1.5, 3, 3);
   }
 
   const rx = offsetX + (cam.x / cam.tileSize) * scale;
   const ry = offsetY + (cam.y / cam.tileSize) * scale;
   const rw = (viewW / cam.tileSize) * scale;
   const rh = (viewH / cam.tileSize) * scale;
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(rx, ry, rw, rh);
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = PALETTE.selection;
+  ctx.lineWidth = 2;
   ctx.strokeRect(rx, ry, rw, rh);
 }
 

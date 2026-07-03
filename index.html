@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#2e6db4" />
     <title>OpenConquest</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
@@ -94,7 +98,11 @@
             </div>
             <p class="help-keys">
               <b>n</b> next unit · <b>space</b> skip · <b>s</b> sentry · <b>Enter</b> end turn ·
-              <b>Esc</b> deselect · drag/arrows pan · wheel zoom · click minimap to jump
+              <b>Esc</b> deselect · drag/arrows pan · wheel or pinch zoom · tap minimap to jump
+            </p>
+            <p class="help-keys">
+              <b>Auto: On</b> skips turns where nothing needs orders — the game fast-forwards to
+              your next available action (like waiting for your first Army to finish).
             </p>
             <div class="dialog-actions">
               <button id="btn-close-help" type="button" class="default-btn">Close</button>
@@ -131,6 +139,7 @@
         <span id="hud-text"></span>
         <button id="btn-next-unit" type="button">Next Unit</button>
         <button id="btn-end-turn" type="button">End Turn</button>
+        <button id="btn-auto" type="button">Auto: On</button>
         <button id="btn-mute" type="button">Sound</button>
         <button id="btn-menu" type="button">Menu</button>
       </div>

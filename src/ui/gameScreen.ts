@@ -73,6 +73,7 @@ export function createGameScreen(
   const hudText = el<HTMLSpanElement>('hud-text');
   const btnEndTurn = el<HTMLButtonElement>('btn-end-turn');
   const btnNextUnit = el<HTMLButtonElement>('btn-next-unit');
+  const btnAuto = el<HTMLButtonElement>('btn-auto');
   const unitPanel = el<HTMLDivElement>('unit-panel');
   const unitPanelText = el<HTMLSpanElement>('unit-panel-text');
   const toasts = el<HTMLDivElement>('toasts');
@@ -89,6 +90,19 @@ export function createGameScreen(
   let selectedId: number | null = null;
   let raf = 0;
   let centeredOnce = false;
+
+  // Auto-advance: when it's your turn and nothing needs input (no awake units
+  // with moves, every city building something), end the turn automatically so
+  // build-up turns fly by. Persisted setting, default on.
+  const AUTO_KEY = 'openconquest.autoAdvance';
+  let autoAdvance = true;
+  try {
+    autoAdvance = (localStorage.getItem(AUTO_KEY) ?? '1') === '1';
+  } catch {
+    /* ignore */
+  }
+  let autoTimer: ReturnType<typeof setTimeout> | null = null;
+  let autoRun = 0;
 
   const viewSize = (): { w: number; h: number } => ({
     w: canvas.clientWidth,
@@ -141,6 +155,7 @@ export function createGameScreen(
     hudText.textContent = `Turn ${view.turn} · ${turnLabel} · ${cityCount} cities`;
     btnEndTurn.disabled = !myTurn();
     btnNextUnit.disabled = !myTurn();
+    btnAuto.textContent = `Auto: ${autoAdvance ? 'On' : 'Off'}`;
 
     const unit = selectedUnit();
     if (unit === undefined) {
@@ -202,6 +217,27 @@ export function createGameScreen(
     );
   }
 
+  /** True when this turn needs no input: no awake units, all cities building. */
+  function nothingToDo(): boolean {
+    if (view === null || view.winner !== null) return false;
+    return actionable().length === 0 && view.yourCities.every((c) => c.production !== null);
+  }
+
+  function maybeAutoAdvance(): void {
+    if (!autoAdvance || !myTurn() || !nothingToDo()) {
+      autoRun = 0;
+      return;
+    }
+    if (autoRun >= 500 || autoTimer !== null) return; // runaway guard
+    autoTimer = setTimeout(() => {
+      autoTimer = null;
+      if (autoAdvance && myTurn() && nothingToDo()) {
+        autoRun++;
+        session.send({ type: 'endTurn' });
+      }
+    }, 150);
+  }
+
   function selectNextUnit(): void {
     const units = actionable();
     if (units.length === 0) {
@@ -222,10 +258,27 @@ export function createGameScreen(
   // ---------- Production dialog ----------
   let productionCityId: number | null = null;
 
+  /**
+   * Touch fires a synthetic click ~300ms after pointerup. When a tap opens a
+   * dialog, that ghost click lands on whatever is now under the finger (e.g. a
+   * production button), triggering it by accident. Swallow the next click.
+   */
+  function swallowNextClick(): void {
+    const kill = (e: Event): void => {
+      e.stopPropagation();
+      e.preventDefault();
+      window.removeEventListener('click', kill, true);
+      clearTimeout(timer);
+    };
+    const timer = setTimeout(() => window.removeEventListener('click', kill, true), 700);
+    window.addEventListener('click', kill, true);
+  }
+
   function openProduction(cityId: number): void {
     if (view === null) return;
     const city = view.yourCities.find((c) => c.id === cityId);
     if (city === undefined) return;
+    swallowNextClick();
     productionCityId = cityId;
     productionTitle.textContent = city.coastal ? 'City (port)' : 'City (inland)';
     productionList.innerHTML = '';
@@ -249,11 +302,12 @@ export function createGameScreen(
     productionDialog.classList.remove('hidden');
   }
 
-  // ---------- Pointer input ----------
-  let dragging = false;
+  // ---------- Pointer input: one finger pans/taps, two fingers pinch-zoom ----------
+  const pointers = new Map<number, { x: number; y: number }>();
   let dragMoved = false;
   let lastX = 0;
   let lastY = 0;
+  let pinchDistance = 0;
 
   function tileFromPointer(e: PointerEvent): { x: number; y: number } {
     const rect = canvas.getBoundingClientRect();
@@ -319,30 +373,69 @@ export function createGameScreen(
     requestRender();
   }
 
+  function pinchState(): { distance: number; midX: number; midY: number } {
+    const [a, b] = [...pointers.values()];
+    if (a === undefined || b === undefined) return { distance: 0, midX: 0, midY: 0 };
+    return {
+      distance: Math.hypot(a.x - b.x, a.y - b.y),
+      midX: (a.x + b.x) / 2,
+      midY: (a.y + b.y) / 2,
+    };
+  }
+
   canvas.addEventListener(
     'pointerdown',
     (e) => {
-      dragging = true;
-      dragMoved = false;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      canvas.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        // Some browsers reject capture mid-gesture; panning still works without it.
+      }
+      if (pointers.size === 1) {
+        dragMoved = false;
+        lastX = e.clientX;
+        lastY = e.clientY;
+      } else if (pointers.size === 2) {
+        dragMoved = true; // a pinch is never a tap
+        pinchDistance = pinchState().distance;
+      }
     },
     { signal },
   );
   canvas.addEventListener(
     'pointermove',
     (e) => {
-      if (!dragging) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      if (Math.abs(dx) + Math.abs(dy) > 4) dragMoved = true;
-      if (dragMoved) {
-        cam.x -= dx;
-        cam.y -= dy;
-        lastX = e.clientX;
-        lastY = e.clientY;
-        requestRender();
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointers.size === 2 && view !== null) {
+        // Pinch: step the zoom when the spread changes enough.
+        const { distance, midX, midY } = pinchState();
+        if (pinchDistance > 0) {
+          const ratio = distance / pinchDistance;
+          if (ratio > 1.25 || ratio < 0.8) {
+            const rect = canvas.getBoundingClientRect();
+            const { w, h } = viewSize();
+            zoomAt(cam, view, w, h, ratio > 1 ? 1 : -1, midX - rect.left, midY - rect.top);
+            pinchDistance = distance;
+            requestRender();
+          }
+        }
+        return;
+      }
+
+      if (pointers.size === 1) {
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        if (Math.abs(dx) + Math.abs(dy) > 6) dragMoved = true;
+        if (dragMoved) {
+          cam.x -= dx;
+          cam.y -= dy;
+          lastX = e.clientX;
+          lastY = e.clientY;
+          requestRender();
+        }
       }
     },
     { signal },
@@ -350,12 +443,21 @@ export function createGameScreen(
   canvas.addEventListener(
     'pointerup',
     (e) => {
-      dragging = false;
-      if (!dragMoved) handleClick(e);
+      const wasPinching = pointers.size >= 2;
+      pointers.delete(e.pointerId);
+      if (pointers.size === 0 && !dragMoved && !wasPinching) handleClick(e);
+      if (pointers.size === 1) {
+        // Pinch ended with one finger down: continue as a pan from here.
+        const rest = [...pointers.values()][0];
+        if (rest !== undefined) {
+          lastX = rest.x;
+          lastY = rest.y;
+        }
+      }
     },
     { signal },
   );
-  canvas.addEventListener('pointercancel', () => (dragging = false), { signal });
+  canvas.addEventListener('pointercancel', (e) => pointers.delete(e.pointerId), { signal });
 
   canvas.addEventListener(
     'wheel',
@@ -458,6 +560,23 @@ export function createGameScreen(
     { signal },
   );
   btnNextUnit.addEventListener('click', selectNextUnit, { signal });
+  btnAuto.addEventListener(
+    'click',
+    () => {
+      autoAdvance = !autoAdvance;
+      try {
+        localStorage.setItem(AUTO_KEY, autoAdvance ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      toast(
+        autoAdvance ? 'Auto-advance on: turns with nothing to do skip ahead.' : 'Auto-advance off.',
+      );
+      updateHud();
+      maybeAutoAdvance();
+    },
+    { signal },
+  );
   el<HTMLButtonElement>('btn-close-production').addEventListener(
     'click',
     () => productionDialog.classList.add('hidden'),
@@ -493,6 +612,7 @@ export function createGameScreen(
     if (next.winner !== null) showVictory();
     void hadView;
     requestRender();
+    maybeAutoAdvance();
   });
   session.onError((message) => toast(message));
   session.onChat((from, text) => {
@@ -538,6 +658,7 @@ export function createGameScreen(
     dispose(): void {
       abort.abort();
       if (raf !== 0) cancelAnimationFrame(raf);
+      if (autoTimer !== null) clearTimeout(autoTimer);
       session.dispose();
       unitPanel.classList.add('hidden');
       productionDialog.classList.add('hidden');

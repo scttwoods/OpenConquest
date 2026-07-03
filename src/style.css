@@ -21,6 +21,16 @@ body {
   color: var(--ink);
   font-family: 'Chicago', 'Charcoal', Geneva, 'Helvetica Neue', Arial, sans-serif;
   overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 #app {
@@ -34,6 +44,11 @@ body {
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+  touch-action: none; /* the game handles pan/pinch itself */
+}
+
+#minimap {
+  touch-action: none;
 }
 
 #title-screen {
@@ -376,4 +391,118 @@ fieldset.field legend {
   width: 220px;
   height: 140px;
   cursor: crosshair;
+}
+
+/* --- Touch devices: bigger targets --- */
+
+@media (pointer: coarse) {
+  #hud button,
+  .dialog-actions button,
+  .menu-buttons button,
+  .production-list button {
+    min-height: 42px;
+  }
+  .production-list button {
+    font-size: 15px;
+  }
+}
+
+/* --- Small screens (phones) --- */
+
+@media (max-width: 700px) {
+  #hud {
+    top: 0;
+    left: 0;
+    right: 0;
+    box-shadow: none;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 6px 8px;
+    padding-top: calc(6px + env(safe-area-inset-top));
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  #hud #hud-text {
+    flex-basis: 100%;
+    text-align: center;
+  }
+
+  #hud button {
+    font-size: 12px;
+    padding: 6px 10px;
+    flex: 1 1 auto;
+  }
+
+  #minimap-window {
+    right: 6px;
+    bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+
+  #minimap {
+    width: 140px;
+    height: 89px;
+  }
+
+  #unit-panel {
+    left: 6px;
+    right: 152px;
+    bottom: calc(6px + env(safe-area-inset-bottom));
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  #chat-window {
+    left: 6px;
+    bottom: calc(52px + env(safe-area-inset-bottom));
+    width: min(220px, 60vw);
+  }
+
+  #chat-log {
+    height: 76px;
+  }
+
+  #toasts {
+    top: 96px;
+    right: 6px;
+    left: 6px;
+    align-items: flex-end;
+    max-width: none;
+  }
+
+  .toast {
+    font-size: 11px;
+    max-width: 260px;
+  }
+
+  .mac-window {
+    min-width: 0;
+    width: min(440px, 94vw);
+  }
+
+  .help-window {
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+
+  .dialog-body {
+    padding: 14px 16px;
+  }
+
+  .title-body {
+    padding: 18px 20px 16px;
+  }
+
+  .title-body h1 {
+    font-size: 26px;
+  }
+
+  fieldset.field {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+  }
 }

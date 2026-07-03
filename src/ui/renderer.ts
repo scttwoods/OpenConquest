@@ -1,33 +1,57 @@
-import { FOG_UNSEEN } from '../core/fog';
+import { FOG_REMEMBERED, FOG_UNSEEN } from '../core/fog';
 import { TERRAIN_SEA } from '../core/mapgen';
 import { inBounds, tileIndex } from '../core/grid';
-import { UNIT_SPECS } from '../core/rules';
 import { NEUTRAL } from '../core/state';
+import type { UnitType } from '../core/rules';
 import type { PlayerView, ViewUnit } from '../core/view';
 import type { Camera } from './camera';
 
-let seaPattern: CanvasPattern | null = null;
+/**
+ * Color-era palette in the spirit of Strategic Conquest 2 (System 7):
+ * blue ocean, green land, blue vs red forces, gray neutral cities.
+ * All art is drawn fresh — silhouette symbols, not copied sprites.
+ */
+export const PALETTE = {
+  sea: '#2e6db4',
+  seaSpeckle: '#5b93cf',
+  land: '#58a24c',
+  landSpeckle: '#4c8f42',
+  coast: '#20431c',
+  fogRemembered: 'rgba(0, 0, 30, 0.32)',
+  you: '#1d50d8',
+  enemy: '#cf2222',
+  neutral: '#8e8e8e',
+  white: '#ffffff',
+  outline: '#000000',
+  selection: '#ffe11a',
+} as const;
 
-/** Sparse diagonal speckle — the classic 1-bit ocean dither. */
-function getSeaPattern(ctx: CanvasRenderingContext2D): CanvasPattern {
-  if (seaPattern === null) {
-    const tile = document.createElement('canvas');
-    tile.width = 4;
-    tile.height = 4;
-    const g = tile.getContext('2d');
-    if (g === null) throw new Error('2d context unavailable');
-    g.fillStyle = '#fff';
-    g.fillRect(0, 0, 4, 4);
-    g.fillStyle = '#000';
-    g.fillRect(0, 0, 1, 1);
-    g.fillRect(2, 2, 1, 1);
-    const pattern = ctx.createPattern(tile, 'repeat');
-    if (pattern === null) throw new Error('createPattern failed');
-    seaPattern = pattern;
-  }
-  return seaPattern;
+let seaPattern: CanvasPattern | null = null;
+let landPattern: CanvasPattern | null = null;
+
+function makePattern(ctx: CanvasRenderingContext2D, base: string, speckle: string): CanvasPattern {
+  const tile = document.createElement('canvas');
+  tile.width = 8;
+  tile.height = 8;
+  const g = tile.getContext('2d');
+  if (g === null) throw new Error('2d context unavailable');
+  g.fillStyle = base;
+  g.fillRect(0, 0, 8, 8);
+  g.fillStyle = speckle;
+  g.fillRect(1, 1, 2, 1);
+  g.fillRect(5, 5, 2, 1);
+  g.fillRect(3, 6, 1, 1);
+  const pattern = ctx.createPattern(tile, 'repeat');
+  if (pattern === null) throw new Error('createPattern failed');
+  return pattern;
 }
 
+function ownerColor(owner: number, you: number): string {
+  if (owner === NEUTRAL) return PALETTE.neutral;
+  return owner === you ? PALETTE.you : PALETTE.enemy;
+}
+
+/** Little building cluster — the SC2-style city icon, tinted by owner. */
 function drawCity(
   ctx: CanvasRenderingContext2D,
   px: number,
@@ -36,36 +60,128 @@ function drawCity(
   owner: number,
   you: number,
 ): void {
-  const margin = Math.max(1, Math.round(ts * 0.12));
-  const size = ts - 2 * margin;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(px + margin, py + margin, size, size);
+  const m = Math.max(1, Math.round(ts * 0.1));
+  const w = ts - 2 * m;
+  const color = ownerColor(owner, you);
 
-  if (owner === NEUTRAL) {
-    ctx.fillStyle = '#fff';
-    const inset = Math.max(1, Math.round(ts / 10));
-    ctx.fillRect(px + margin + inset, py + margin + inset, size - 2 * inset, size - 2 * inset);
-    ctx.fillStyle = '#000';
-    const dot = Math.max(1, Math.round(size * 0.3));
-    ctx.fillRect(px + ts / 2 - dot / 2, py + ts / 2 - dot / 2, dot, dot);
-    return;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = PALETTE.outline;
+  ctx.lineWidth = Math.max(1, ts / 16);
+
+  // Three towers of differing heights.
+  const base = py + m + w;
+  const towerW = w / 3;
+  const heights = [0.55, 0.95, 0.72];
+  for (let i = 0; i < 3; i++) {
+    const th = w * (heights[i] ?? 0.7);
+    ctx.fillRect(px + m + i * towerW, base - th, towerW, th);
+    ctx.strokeRect(px + m + i * towerW + 0.5, base - th + 0.5, towerW - 1, th - 1);
   }
-  ctx.fillStyle = '#fff';
-  ctx.strokeStyle = '#fff';
-  if (owner === you) {
-    const dot = Math.max(1, Math.round(size * 0.35));
-    ctx.fillRect(px + ts / 2 - dot / 2, py + ts / 2 - dot / 2, dot, dot);
-  } else {
-    const a = margin + Math.max(1, Math.round(size * 0.25));
-    const b = ts - a;
-    ctx.lineWidth = Math.max(1, ts / 12);
-    ctx.beginPath();
-    ctx.moveTo(px + a, py + a);
-    ctx.lineTo(px + b, py + b);
-    ctx.moveTo(px + b, py + a);
-    ctx.lineTo(px + a, py + b);
-    ctx.stroke();
+  // Windows.
+  if (ts >= 14) {
+    ctx.fillStyle = PALETTE.white;
+    for (let i = 0; i < 3; i++) {
+      const th = w * (heights[i] ?? 0.7);
+      const cx = px + m + i * towerW + towerW / 2;
+      ctx.fillRect(cx - 1, base - th + w * 0.15, 2, 2);
+      if (th > w * 0.6) ctx.fillRect(cx - 1, base - th + w * 0.42, 2, 2);
+    }
   }
+}
+
+/** White silhouette symbols on an owner-colored chip — plane, hulls, tank. */
+function drawSymbol(
+  ctx: CanvasRenderingContext2D,
+  type: UnitType,
+  cx: number,
+  cy: number,
+  s: number,
+): void {
+  ctx.fillStyle = PALETTE.white;
+  ctx.beginPath();
+  switch (type) {
+    case 'army': // tank silhouette
+      ctx.fillRect(cx - s * 0.55, cy + s * 0.05, s * 1.1, s * 0.38); // hull/tracks
+      ctx.fillRect(cx - s * 0.22, cy - s * 0.3, s * 0.44, s * 0.34); // turret
+      ctx.fillRect(cx + s * 0.2, cy - s * 0.22, s * 0.42, s * 0.12); // barrel
+      return;
+    case 'fighter': // swept-wing jet, nose right
+      ctx.moveTo(cx + s * 0.65, cy);
+      ctx.lineTo(cx - s * 0.15, cy - s * 0.22);
+      ctx.lineTo(cx - s * 0.25, cy - s * 0.6);
+      ctx.lineTo(cx - s * 0.45, cy - s * 0.12);
+      ctx.lineTo(cx - s * 0.65, cy - s * 0.3);
+      ctx.lineTo(cx - s * 0.55, cy);
+      ctx.lineTo(cx - s * 0.65, cy + s * 0.3);
+      ctx.lineTo(cx - s * 0.45, cy + s * 0.12);
+      ctx.lineTo(cx - s * 0.25, cy + s * 0.6);
+      ctx.lineTo(cx - s * 0.15, cy + s * 0.22);
+      ctx.closePath();
+      ctx.fill();
+      return;
+    case 'transport': // hull with cargo box
+      hull(ctx, cx, cy, s);
+      ctx.fillRect(cx - s * 0.3, cy - s * 0.38, s * 0.6, s * 0.34);
+      return;
+    case 'destroyer': // slim hull, one small stack
+      hull(ctx, cx, cy, s);
+      ctx.fillRect(cx - s * 0.12, cy - s * 0.42, s * 0.24, s * 0.38);
+      return;
+    case 'submarine': // surfaced pill with sail
+      ctx.ellipse(cx, cy + s * 0.1, s * 0.62, s * 0.24, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(cx - s * 0.12, cy - s * 0.34, s * 0.24, s * 0.34);
+      return;
+    case 'cruiser': // hull, two turrets
+      hull(ctx, cx, cy, s);
+      ctx.fillRect(cx - s * 0.42, cy - s * 0.32, s * 0.24, s * 0.28);
+      ctx.fillRect(cx + s * 0.18, cy - s * 0.32, s * 0.24, s * 0.28);
+      return;
+    case 'carrier': // flat-top deck with island
+      ctx.fillRect(cx - s * 0.68, cy - s * 0.16, s * 1.36, s * 0.22);
+      ctx.moveTo(cx - s * 0.6, cy + s * 0.06);
+      ctx.lineTo(cx + s * 0.6, cy + s * 0.06);
+      ctx.lineTo(cx + s * 0.42, cy + s * 0.42);
+      ctx.lineTo(cx - s * 0.42, cy + s * 0.42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(cx + s * 0.28, cy - s * 0.4, s * 0.2, s * 0.24);
+      return;
+    case 'battleship': // hull, three turrets, mast
+      hull(ctx, cx, cy, s);
+      ctx.fillRect(cx - s * 0.5, cy - s * 0.3, s * 0.22, s * 0.26);
+      ctx.fillRect(cx - s * 0.11, cy - s * 0.3, s * 0.22, s * 0.26);
+      ctx.fillRect(cx + s * 0.28, cy - s * 0.3, s * 0.22, s * 0.26);
+      ctx.fillRect(cx - s * 0.03, cy - s * 0.52, s * 0.06, s * 0.24);
+      return;
+  }
+}
+
+function hull(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  ctx.moveTo(cx - s * 0.65, cy + s * 0.02);
+  ctx.lineTo(cx + s * 0.65, cy + s * 0.02);
+  ctx.lineTo(cx + s * 0.45, cy + s * 0.4);
+  ctx.lineTo(cx - s * 0.45, cy + s * 0.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+}
+
+function roundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 function drawUnit(
@@ -77,46 +193,38 @@ function drawUnit(
   you: number,
   selected: boolean,
 ): void {
-  const mine = unit.owner === you;
-  const margin = Math.max(1, Math.round(ts * 0.18));
+  const margin = Math.max(1, Math.round(ts * 0.12));
   const size = ts - 2 * margin;
 
-  ctx.fillStyle = mine ? '#000' : '#fff';
-  ctx.fillRect(px + margin, py + margin, size, size);
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = Math.max(1, Math.round(ts / 14));
-  ctx.strokeRect(px + margin + 0.5, py + margin + 0.5, size - 1, size - 1);
+  ctx.fillStyle = ownerColor(unit.owner, you);
+  roundedRect(ctx, px + margin, py + margin, size, size, Math.max(2, ts * 0.14));
+  ctx.fill();
+  ctx.strokeStyle = PALETTE.outline;
+  ctx.lineWidth = Math.max(1, Math.round(ts / 16));
+  ctx.stroke();
 
-  if (ts >= 10) {
-    ctx.fillStyle = mine ? '#fff' : '#000';
-    ctx.font = `bold ${Math.round(ts * 0.55)}px "Courier New", monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(UNIT_SPECS[unit.type].letter, px + ts / 2, py + ts / 2 + 1);
+  if (ts >= 12) {
+    drawSymbol(ctx, unit.type, px + ts / 2, py + ts / 2, size * 0.42);
   }
 
-  if (unit.cargoCount > 0 && ts >= 12) {
-    const chip = Math.max(6, Math.round(ts * 0.4));
-    ctx.fillStyle = '#fff';
+  if (unit.cargoCount > 0 && ts >= 14) {
+    const chip = Math.max(7, Math.round(ts * 0.38));
+    ctx.fillStyle = PALETTE.white;
     ctx.fillRect(px + ts - chip, py + ts - chip, chip, chip);
     ctx.strokeRect(px + ts - chip + 0.5, py + ts - chip + 0.5, chip - 1, chip - 1);
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = PALETTE.outline;
     ctx.font = `bold ${chip - 2}px "Courier New", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillText(String(unit.cargoCount), px + ts - chip / 2, py + ts - chip / 2 + 1);
   }
 
   if (selected) {
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 2]);
-    ctx.strokeRect(px + 1.5, py + 1.5, ts - 3, ts - 3);
+    ctx.strokeStyle = PALETTE.selection;
+    ctx.lineWidth = Math.max(2, ts / 10);
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(px + 1, py + 1, ts - 2, ts - 2);
     ctx.setLineDash([]);
-    ctx.strokeStyle = '#fff';
-    ctx.setLineDash([3, 2]);
-    ctx.lineDashOffset = 3;
-    ctx.strokeRect(px + 1.5, py + 1.5, ts - 3, ts - 3);
-    ctx.setLineDash([]);
-    ctx.lineDashOffset = 0;
   }
 }
 
@@ -133,11 +241,14 @@ export function renderGame(
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, viewW, viewH);
 
+  seaPattern ??= makePattern(ctx, PALETTE.sea, PALETTE.seaSpeckle);
+  landPattern ??= makePattern(ctx, PALETTE.land, PALETTE.landSpeckle);
+
   const x0 = Math.max(0, Math.floor(cam.x / ts));
   const y0 = Math.max(0, Math.floor(cam.y / ts));
   const x1 = Math.min(view.width - 1, Math.ceil((cam.x + viewW) / ts));
   const y1 = Math.min(view.height - 1, Math.ceil((cam.y + viewH) / ts));
-  const edge = Math.max(1, Math.round(ts / 10));
+  const edge = Math.max(1, Math.round(ts / 9));
 
   const screenX = (x: number): number => Math.round(x * ts - cam.x);
   const screenY = (y: number): number => Math.round(y * ts - cam.y);
@@ -149,13 +260,13 @@ export function renderGame(
       const px = screenX(x);
       const py = screenY(y);
 
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(px, py, ts, ts);
       if (view.terrain[i] === TERRAIN_SEA) {
-        ctx.fillStyle = getSeaPattern(ctx);
+        ctx.fillStyle = seaPattern;
         ctx.fillRect(px, py, ts, ts);
       } else {
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = landPattern;
+        ctx.fillRect(px, py, ts, ts);
+        ctx.fillStyle = PALETTE.coast;
         const seaAt = (nx: number, ny: number): boolean =>
           !inBounds(nx, ny, view.width, view.height) ||
           view.terrain[tileIndex(nx, ny, view.width)] === TERRAIN_SEA;
@@ -182,12 +293,22 @@ export function renderGame(
     drawUnit(ctx, screenX(unit.x), screenY(unit.y), ts, unit, view.you, unit.id === selectedUnitId);
   }
 
+  // Dim what is remembered but not currently visible (stale intel).
+  ctx.fillStyle = PALETTE.fogRemembered;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (view.fog[tileIndex(x, y, view.width)] === FOG_REMEMBERED) {
+        ctx.fillRect(screenX(x), screenY(y), ts, ts);
+      }
+    }
+  }
+
   // Destination marker for the selected unit's standing order.
   const selected = view.units.find((u) => u.id === selectedUnitId);
   if (selected !== undefined && selected.dest !== null) {
     const px = screenX(selected.dest.x);
     const py = screenY(selected.dest.y);
-    ctx.strokeStyle = '#000';
+    ctx.strokeStyle = PALETTE.selection;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(px + 3, py + 3);

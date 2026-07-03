@@ -30,7 +30,7 @@ function setStatus(text: string): void {
   statusLine.textContent = text;
 }
 
-/** Title-screen backdrop: dithered speckle, replaced by the map in-game. */
+/** Title-screen backdrop: speckled ocean, replaced by the map in-game. */
 function drawBackground(): void {
   const ctx = canvas.getContext('2d');
   if (ctx === null) return;
@@ -38,14 +38,14 @@ function drawBackground(): void {
   canvas.width = Math.floor(canvas.clientWidth * dpr);
   canvas.height = Math.floor(canvas.clientHeight * dpr);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = '#2e6db4';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const tile = 8 * dpr;
   const rng = createRng(1984);
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = '#5b93cf';
   for (let y = 0; y < canvas.height; y += tile) {
     for (let x = 0; x < canvas.width; x += tile) {
-      if (rng.chance(0.06)) ctx.fillRect(x, y, dpr, dpr);
+      if (rng.chance(0.1)) ctx.fillRect(x, y, 2 * dpr, dpr);
     }
   }
 }
