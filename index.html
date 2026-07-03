@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenConquest</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+      <div id="title-screen">
+        <div class="title-window">
+          <div class="title-bar"><span class="title-bar-text">OpenConquest</span></div>
+          <div class="title-body">
+            <h1>OpenConquest</h1>
+            <p class="tagline">Explore. Produce. Conquer.</p>
+            <div class="menu-buttons">
+              <button id="btn-vs-computer" type="button">vs Computer</button>
+              <button id="btn-pvp" type="button">Online PvP</button>
+              <button id="btn-conn-test" type="button">Test Connection</button>
+            </div>
+            <p id="status-line" role="status">&nbsp;</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

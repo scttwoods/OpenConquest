@@ -305,7 +305,9 @@ Node container — moving to Render/Railway/a VPS later is a 30-minute job.
 
 ## 7. Progress
 
-- [ ] Phase 0 — Scaffold, server skeleton & Fly.io deploy
+- [x] Phase 0 — Scaffold, server skeleton & Fly.io deploy
+      (code complete & verified locally; Fly app creation + FLY_API_TOKEN secret
+      are the remaining one-time manual steps — see README)
 - [ ] Phase 1 — Map generation, rendering, fog of war
 - [ ] Phase 2 — Armies, cities, combat, capture (first playable)
 - [ ] Phase 3 — Navy & air force

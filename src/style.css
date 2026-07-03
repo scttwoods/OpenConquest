@@ -1,0 +1,122 @@
+/* Retro 1-bit Macintosh look: pure black and white, hard edges, no smoothing. */
+
+:root {
+  --ink: #000;
+  --paper: #fff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Chicago', 'Charcoal', Geneva, 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+#title-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* System-6-style window */
+.title-window {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  min-width: 320px;
+}
+
+.title-bar {
+  border-bottom: 2px solid var(--ink);
+  padding: 4px 8px;
+  text-align: center;
+  /* Classic horizontal-lines title bar */
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--paper) 0 2px,
+    var(--ink) 2px 3px
+  );
+}
+
+.title-bar-text {
+  background: var(--paper);
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.title-body {
+  padding: 24px 32px 20px;
+  text-align: center;
+}
+
+.title-body h1 {
+  font-size: 32px;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.tagline {
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.menu-buttons button {
+  font-family: inherit;
+  font-size: 15px;
+  width: 200px;
+  padding: 6px 0;
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.menu-buttons button:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.menu-buttons button:active {
+  transform: translate(1px, 1px);
+}
+
+#status-line {
+  margin-top: 16px;
+  font-size: 12px;
+  min-height: 1.2em;
+}
