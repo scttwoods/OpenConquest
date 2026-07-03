@@ -79,15 +79,14 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     name: 'Fighter',
     letter: 'F',
     domain: 'air',
-    moves: 4,
+    // Fast and far-ranging: 10 tiles per turn, 20 fuel = 2 full turns aloft
+    // before it must land at a city or Carrier to refuel (or it crashes).
+    moves: 10,
     hits: 1,
     buildTime: 8,
-    vision: 3,
+    vision: 2,
     damage: 1,
-    // Fuel is a there-and-back move budget, so combat radius is ~fuel/2 tiles.
-    // 40 gives a ~20-tile radius (10 turns aloft) — a real long-range scout /
-    // interceptor. Carriers refuel it to extend reach across oceans.
-    fuel: 40,
+    fuel: 20,
   },
   transport: {
     name: 'Transport',

@@ -103,7 +103,7 @@
               <table id="help-units"></table>
             </div>
             <p class="help-keys">
-              <b>n</b> next unit · <b>space</b> skip · <b>s</b> sentry · <b>Enter</b> end turn ·
+              <b>n</b> next unit · <b>space</b> skip · <b>s</b> sleep · <b>Enter</b> end turn ·
               <b>Esc</b> deselect · drag/arrows pan · wheel or pinch zoom · tap minimap to jump
             </p>
             <p class="help-keys">
@@ -164,6 +164,10 @@
 
       <div id="unit-panel" class="hidden">
         <span id="unit-panel-text"></span>
+        <span id="unit-panel-actions">
+          <button id="btn-sleep" type="button">Sleep</button>
+          <button id="btn-skip" type="button">Skip</button>
+        </span>
       </div>
 
       <div id="toasts"></div>

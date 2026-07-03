@@ -76,6 +76,9 @@ export function createGameScreen(
   const btnAuto = el<HTMLButtonElement>('btn-auto');
   const unitPanel = el<HTMLDivElement>('unit-panel');
   const unitPanelText = el<HTMLSpanElement>('unit-panel-text');
+  const unitPanelActions = el<HTMLSpanElement>('unit-panel-actions');
+  const btnSleep = el<HTMLButtonElement>('btn-sleep');
+  const btnSkip = el<HTMLButtonElement>('btn-skip');
   const toasts = el<HTMLDivElement>('toasts');
   const productionDialog = el<HTMLDivElement>('production-dialog');
   const productionTitle = el<HTMLSpanElement>('production-title');
@@ -174,7 +177,11 @@ export function createGameScreen(
       if (unit.type === 'fighter') bits.push(`fuel ${unit.fuel}`);
       if (unit.cargoCount > 0) bits.push(`cargo ${unit.cargoCount}`);
       if (unit.aboard !== null) bits.push('aboard transport');
+      if (unit.mode === 'sentry') bits.push('sleeping');
       unitPanelText.textContent = bits.join(' · ');
+      // Sleep/Skip only make sense for a unit that can still act.
+      const canAct = myTurn() && unit.aboard === null && unit.movesLeft > 0;
+      unitPanelActions.style.display = canAct ? 'flex' : 'none';
     }
   }
 
@@ -351,7 +358,7 @@ export function createGameScreen(
       if (myTurn() && u.aboard === null && u.movesLeft > 0) {
         const sentry = document.createElement('button');
         sentry.type = 'button';
-        sentry.textContent = 'Sentry';
+        sentry.textContent = 'Sleep';
         sentry.addEventListener('click', (e) => {
           e.stopPropagation();
           session.send({ type: 'order', unitId: u.id, order: 'sentry' });
@@ -451,12 +458,21 @@ export function createGameScreen(
 
     // 2) A unit is selected and it's your turn: act on the tapped tile.
     if (sel !== undefined && myTurn()) {
+      const adjacent = chebyshev(sel.x, sel.y, tile.x, tile.y) === 1;
       const boardTarget = selectableHere.find((u) => canBoard(sel, u));
-      // Adjacent tap = a direct action: attack, move, or board a neighbor.
-      if (
-        chebyshev(sel.x, sel.y, tile.x, tile.y) === 1 &&
-        (selectableHere.length === 0 || boardTarget !== undefined)
-      ) {
+
+      // Your own city is always a valid destination — you can garrison it even
+      // when it already holds units. (Adjacent moves in; a distant tap sets a
+      // move order.) This must come before unit-selection so tapping an
+      // occupied city moves the unit in rather than selecting the occupant.
+      if (cityHere !== undefined) {
+        if (adjacent) session.send({ type: 'move', unitId: sel.id, to: tile });
+        else if (sel.aboard === null)
+          session.send({ type: 'order', unitId: sel.id, order: { moveTo: tile } });
+        return;
+      }
+      // Board an adjacent Transport/Carrier.
+      if (adjacent && boardTarget !== undefined) {
         session.send({ type: 'move', unitId: sel.id, to: tile });
         return;
       }
@@ -466,8 +482,12 @@ export function createGameScreen(
         selectOrStack(selectableHere);
         return;
       }
-      // Empty distant tile = a standing move order; keep the unit selected so
-      // its planned path stays visible and can be retargeted.
+      // Adjacent enemy/empty tile = a direct move or attack.
+      if (adjacent) {
+        session.send({ type: 'move', unitId: sel.id, to: tile });
+        return;
+      }
+      // Empty distant tile = a standing move order.
       if (sel.aboard === null) {
         session.send({ type: 'order', unitId: sel.id, order: { moveTo: tile } });
         return;
@@ -676,6 +696,30 @@ export function createGameScreen(
     { signal },
   );
   btnNextUnit.addEventListener('click', selectNextUnit, { signal });
+  btnSleep.addEventListener(
+    'click',
+    () => {
+      const unit = selectedUnit();
+      if (unit !== undefined && myTurn()) {
+        // Sentry = sleep: the unit holds position (waking only if an enemy
+        // comes adjacent) and no longer blocks auto-advance.
+        session.send({ type: 'order', unitId: unit.id, order: 'sentry' });
+        selectedId = null;
+      }
+    },
+    { signal },
+  );
+  btnSkip.addEventListener(
+    'click',
+    () => {
+      const unit = selectedUnit();
+      if (unit !== undefined && myTurn()) {
+        session.send({ type: 'order', unitId: unit.id, order: 'skip' });
+        selectNextUnit();
+      }
+    },
+    { signal },
+  );
   btnAuto.addEventListener(
     'click',
     () => {
@@ -726,8 +770,14 @@ export function createGameScreen(
         centerOn(cam, next, w, h, home.x, home.y);
       }
     }
-    if (selectedId !== null && next.units.every((u) => u.id !== selectedId)) {
-      selectedId = null;
+    if (selectedId !== null) {
+      const selUnit = next.units.find((u) => u.id === selectedId);
+      // Deselect once the unit is gone or has spent all its moves — an
+      // out-of-moves unit then greys out with the rest of the done units,
+      // making it obvious it's finished for the turn.
+      if (selUnit === undefined || selUnit.movesLeft === 0) {
+        selectedId = null;
+      }
     }
     handleEvents(next.events);
     if (next.winner !== null) showVictory();
