@@ -176,7 +176,8 @@ export function createGameScreen(
         `hits ${unit.hits}/${s.hits}`,
       ];
       if (unit.type === 'fighter') bits.push(`fuel ${unit.fuel}`);
-      if (unit.cargoCount > 0) bits.push(`cargo ${unit.cargoCount}`);
+      const cargo = cargoLabel(unit);
+      if (cargo !== null) bits.push(cargo);
       if (unit.aboard !== null) bits.push('aboard transport');
       if (unit.mode === 'sentry') bits.push('sleeping');
       unitPanelText.textContent = bits.join(' · ');
@@ -369,11 +370,20 @@ export function createGameScreen(
 
   // ---------- Stacked-units panel ----------
 
+  /** e.g. "2/6 armies" for a transport, "1/8 planes" for a carrier; null otherwise. */
+  function cargoLabel(u: ViewUnit): string | null {
+    const cap = UNIT_SPECS[u.type].capacity;
+    if (cap === undefined) return null;
+    const noun = cap.type === 'army' ? 'armies' : 'planes';
+    return `${u.cargoCount}/${cap.count} ${noun}`;
+  }
+
   function unitStatusLine(u: ViewUnit): string {
     const s = UNIT_SPECS[u.type];
     const bits = [`moves ${u.movesLeft}/${s.moves}`, `hits ${u.hits}/${s.hits}`];
     if (u.type === 'fighter') bits.push(`fuel ${u.fuel}`);
-    if (u.cargoCount > 0) bits.push(`carrying ${u.cargoCount}`);
+    const cargo = cargoLabel(u);
+    if (cargo !== null) bits.push(cargo);
     if (u.aboard !== null) bits.push('aboard');
     if (u.mode === 'sentry') bits.push('sentry');
     else if (u.mode === 'moveto') bits.push('moving');
