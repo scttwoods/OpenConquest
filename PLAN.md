@@ -2,7 +2,14 @@
 
 A web recreation of the classic Macintosh strategy game **Strategic Conquest**
 (Peter Merrill / PBI Software / Delta Tao, 1984–1996), itself a descendant of the
-mainframe game *Empire*. Runs entirely in the browser, deployed free on GitHub Pages.
+mainframe game *Empire*. Two ways to play:
+
+- **vs Computer** — runs entirely in the browser, no server involved.
+- **Online PvP** — two humans over the internet (you vs. Dad), live over WebSockets:
+  create a game, share a join code, watch each other's visible moves in real time.
+  Games persist server-side so you can also play a turn whenever and come back later.
+
+Hosted on **Fly.io** (one tiny app serves both the site and the multiplayer server).
 
 > **How to use this plan with Claude Code:** work one phase at a time. Open Claude
 > Code in this repo and say, e.g., *"Read PLAN.md and implement Phase 0. Commit when
@@ -24,8 +31,14 @@ generated world of islands and oceans, covered by fog of war.
 5. Win by capturing/destroying everything the enemy has.
 
 **Scope decisions (defaults — revisit later if desired):**
-- Single-player vs. one computer opponent. (Hotseat 2-player is a cheap Phase-6 add.)
-- Entirely client-side: no server, no accounts. Saves go to `localStorage`.
+- Two modes: single-player vs. AI (client-only) and 2-player online PvP.
+- PvP uses **alternating turns** (faithful to the original). "Real time" means you
+  both stay connected and watch the opponent's moves appear live in your visible
+  area as they make them — plus a small in-game chat. Async also works: the server
+  keeps the game, so either player can close the tab and take their turn later.
+- No accounts. A PvP game is a 6-character join code you text to the other player.
+  Reconnecting with the same code + a browser-stored player token resumes your seat.
+- vs-AI saves go to `localStorage`; PvP games live on the server.
 - Look and feel: retro 1-bit Macintosh aesthetic (black & white, patterned dithering,
   Chicago-style pixel font, System 6 style windows). This is a loving homage —
   **do not copy original artwork, sounds, or the "Strategic Conquest" name/trademark.**
@@ -45,9 +58,12 @@ generated world of islands and oceans, covered by fog of war.
 | State | Plain immutable-ish TS objects; game core is framework-free | Testable, deterministic |
 | RNG | Seeded PRNG (e.g. mulberry32) | Reproducible maps & replayable bugs |
 | Tests | Vitest | Unit-test the game core (combat, pathing, AI) |
-| Hosting | **GitHub Pages** via GitHub Actions | Free, zero config beyond a workflow file, same repo |
+| Server | Node 22 + Fastify (static files) + `ws` (WebSockets) | One small process serves the built client *and* hosts PvP games |
+| Hosting | **Fly.io**, single app, auto-stop machine | See §5 — effectively pennies/month; free alternatives listed |
 
-**No backend.** The whole game is a static site. This is what makes free hosting trivial.
+The server is thin on purpose: it imports the same `core/` package the client uses.
+Because `core/` is pure TypeScript with no browser globals, it runs in Node unchanged —
+that's what makes PvP cheap to build.
 
 ### Architecture rule (important)
 
@@ -55,17 +71,35 @@ Keep three layers strictly separated:
 
 ```
 src/
-  core/        # Pure game logic. No DOM, no Canvas, no timers.
+  core/        # Pure game logic. No DOM, no Canvas, no timers, no network.
                # map generation, units, combat, movement, production,
-               # fog of war, victory conditions, save/load serialization
+               # fog of war, victory conditions, save/load serialization.
+               # Exposes: applyCommand(state, playerId, command) -> newState
+               # and viewFor(state, playerId) -> fogged player view.
   ai/          # Computer opponent. Consumes core's public API only.
   ui/          # Canvas renderer, input handling, panels, dialogs, sound.
-  main.ts      # Wires ui <-> core, game loop / turn sequencing
+  session/     # The seam between ui and a game:
+               #   LocalSession  — vs-AI: applies commands in-process
+               #   RemoteSession — PvP: sends commands over WebSocket,
+               #                    receives fogged views back
+  main.ts      # Menu, mode selection, wiring
+server/
+  index.ts     # Fastify: serves dist/ + /health; upgrades /ws connections
+  rooms.ts     # Game rooms: create/join by code, seat tokens, reconnection
+  store.ts     # Persistence: JSON snapshots to a Fly volume (or SQLite later)
 ```
 
-`core/` must be importable in Node (for Vitest) with zero browser globals. Every
-rule of the game lives in `core/`, and `ui/` merely displays state and forwards
-player commands.
+`core/` must be importable in Node (for Vitest and the server) with zero browser
+globals. Every rule of the game lives in `core/`; `ui/` only displays state and
+forwards player commands.
+
+**The load-bearing decision:** from the very first playable phase, the UI never
+mutates game state directly — it emits **serializable command objects**
+(`{type:'move', unit:12, to:[34,56]}`) through the `session` interface. In vs-AI
+mode those apply locally; in PvP they go over the wire. The server is authoritative
+for PvP: it validates each command against the rules, applies it, and sends each
+player only their own fogged view — so neither of you can peek under the fog, and
+the two clients can never drift out of sync.
 
 ---
 
@@ -109,12 +143,12 @@ friendly city.
   Captured city: production resets and any enemy planes based there are destroyed.
 
 ### 3.4 Turn structure
-1. Player turn: each unit with movement points may move/attack/be given standing
-   orders (Sentry, Move-to via A* pathfinding, Explore, Patrol). Cities with no
-   production assignment prompt for one.
+1. Active player's turn: each unit with movement points may move/attack/be given
+   standing orders (Sentry, Move-to via A* pathfinding, Explore, Patrol). Cities
+   with no production assignment prompt for one.
 2. End turn → production ticks, fighters burn fuel, docked ships repair.
-3. AI turn (same rules, no cheating on fog of war — or at least: AI info advantages
-   only as an explicit difficulty setting).
+3. Other side's turn — the AI in vs-Computer mode, the other human in PvP (their
+   moves that enter your visible area render live on your screen while you wait).
 4. Victory check: a side with no cities and no units (or no cities and no Armies
    plus no Transports carrying Armies) loses. Offer surrender when hopeless.
 
@@ -134,13 +168,18 @@ friendly city.
 
 ### Phase 0 — Scaffold & deploy pipeline (get "hello world" on the web first)
 - `npm create vite@latest` → vanilla-ts template, strict tsconfig, Vitest, ESLint+Prettier.
-- Set Vite `base: '/OpenConquest/'` (required for project-site GitHub Pages).
-- GitHub Actions workflow `.github/workflows/deploy.yml`: on push to `main`,
-  build and deploy `dist/` with `actions/deploy-pages` (official Vite/GH-Pages recipe).
-- Placeholder canvas rendering a checkerboard + title screen.
-- README with dev instructions (`npm run dev`, `npm test`).
-- **Done when:** repo Settings → Pages set to "GitHub Actions"; pushing to `main`
-  publishes to `https://<user>.github.io/OpenConquest/` and the page renders.
+- Minimal `server/`: Fastify serving `dist/` + a `/health` route + a `/ws` echo
+  endpoint (proves WebSockets work end-to-end before any game code exists).
+- Dev ergonomics: `npm run dev` runs Vite + server concurrently, Vite proxies `/ws`.
+- `Dockerfile` (multi-stage: build client, run server) + `fly.toml` with
+  `auto_stop_machines = true`, `auto_start_machines = true`, `min_machines_running = 0`.
+- GitHub Actions workflow: on push to `main`, `flyctl deploy` (needs a
+  `FLY_API_TOKEN` repo secret — one-time manual step, see §5).
+- Placeholder canvas rendering a checkerboard + title screen with the two mode
+  buttons (vs Computer / Online PvP) stubbed.
+- README with dev instructions (`npm run dev`, `npm test`, `fly deploy`).
+- **Done when:** `https://<app>.fly.dev` serves the title screen and a test button
+  round-trips a message through the `/ws` echo endpoint.
 
 ### Phase 1 — World: map generation, rendering, fog
 - `core/`: tile grid, seeded map generator (islands + neutral cities + 2 starts),
@@ -154,6 +193,8 @@ friendly city.
 ### Phase 2 — Armies, cities, combat, capture (first playable!)
 - Production system (city builds Army in N turns), unit selection & movement with
   movement points, combat resolution, city capture, turn sequencing, victory check.
+- All player input flows as serializable commands through the `session` interface
+  (`LocalSession` for now) — this is the seam PvP plugs into in Phase 5.
 - Unit cycling, sentry, end-turn flow, production dialog.
 - A trivial "dummy" AI (moves armies randomly) so the loop is complete.
 - Unit tests: combat math (statistical bounds), capture logic, production timing.
@@ -184,7 +225,29 @@ Priority-driven, per-city + per-unit heuristics (this is how the original felt):
 - **Done when:** the AI beats a passive player, expands across oceans, and a
   competent human still has fun beating it on Normal.
 
-### Phase 5 — Polish: retro UI, sound, saves
+### Phase 5 — Online PvP (play with Dad)
+- `server/rooms.ts`: **Create Game** → server generates the map, returns a
+  6-character join code + a seat token (stored in the creator's `localStorage`).
+  **Join Game** → second player enters the code, gets the other seat + token.
+- Server-authoritative loop: client sends commands, server validates via `core/`,
+  applies, broadcasts each player their updated **fogged view** (never the full
+  state). Turn ownership enforced server-side.
+- `RemoteSession` in the client implements the same interface as `LocalSession`,
+  so the whole Phase 2–3 UI works unmodified in PvP.
+- Live spectating of the opponent's turn: events that intersect your visibility
+  stream in as they happen; a status bar shows "Dad is moving… (12 units left)".
+- Reconnection: refresh/drop → reconnect with code + token → full fogged view
+  resync. Games snapshot to disk (Fly volume) on every turn end, survive restarts,
+  and expire after ~30 days idle.
+- In-game chat sidebar (it's Dad — trash talk is a core feature).
+- Simple lobby screen listing your in-progress games (from tokens in `localStorage`).
+- Tests: two headless WebSocket clients play a scripted game in CI; illegal-command
+  and out-of-turn rejection; reconnect resync equivalence.
+- **Done when:** two browsers (one on your machine, one on a phone on cellular)
+  can create/join, play alternating turns watching each other's moves live,
+  survive a mid-game refresh, and finish a game on the Fly.io URL.
+
+### Phase 6 — Polish: retro UI, sound, saves
 - System-6-style menu bar & dialog windows, Chicago-like webfont (there are free
   lookalikes; don't ship Apple's actual font), 1-bit sprite pass for all units.
 - Sound: tiny synthesized click/boom/fanfare via WebAudio (no copied samples).
@@ -193,25 +256,48 @@ Priority-driven, per-city + per-unit heuristics (this is how the original felt):
 - Battle reports, turn counter, casualty stats, end-of-game score screen.
 - **Done when:** a stranger can open the URL and learn/play without you explaining.
 
-### Phase 6 — Ship it & extras (optional)
-- Merge to `main`, confirm the Pages deploy, playtest on desktop + tablet.
-- Nice-to-haves in rough priority: hotseat 2-player · replay viewer (deterministic
-  core makes this cheap) · map editor · larger maps with typed-array perf pass ·
-  PWA manifest for offline play.
+### Phase 7 — Ship it & extras (optional)
+- Merge to `main`, confirm the Fly deploy, playtest on desktop + tablet — then
+  play a real game with Dad end-to-end.
+- Nice-to-haves in rough priority: turn notifications for async play (email or
+  push via a free service) · hotseat 2-player on one machine · replay viewer
+  (deterministic core makes this cheap) · map editor · larger maps with
+  typed-array perf pass · PWA manifest.
 
 ---
 
-## 5. Free-hosting notes
+## 5. Hosting: Fly.io (and honest cost notes)
 
-**Primary: GitHub Pages** — already where the code lives; the Phase-0 workflow makes
-every push to `main` auto-deploy. Free for public repos, custom domain optional.
+**Primary: Fly.io** — one app runs the Node server, which serves both the static
+client and the PvP WebSockets. Long-lived WebSocket connections work natively
+(no serverless timeout games), and a 256 MB shared-CPU machine is far more than
+this game needs.
 
-Fallbacks (equally free for a static Vite site, if Pages ever chafes):
-- **Cloudflare Pages** — generous free tier, fast CDN, connect the GitHub repo.
-- **Netlify / Vercel** — same one-click connect; watch free-tier build minutes.
+- **Cost reality:** Fly.io no longer has a free tier for new accounts — it's
+  pay-as-you-go. But with `auto_stop_machines`/`auto_start_machines` and
+  `min_machines_running = 0`, the machine **stops when nobody is connected and
+  cold-starts in ~1 second when someone opens the URL**. A machine that only runs
+  during your evening games with Dad costs cents per month; a small persistent
+  volume for saved games adds a few cents more. Budget: well under $1–2/month in
+  practice. (Verify current pricing at fly.io/docs/about/pricing when implementing.)
+- One-time manual setup: install `flyctl`, `fly launch` (creates the app +
+  `fly.toml`), `fly volumes create games_data -s 1`, and add a `FLY_API_TOKEN`
+  secret to the GitHub repo so Actions can deploy.
+- Auto-stop caveat: stopping machines kills in-memory state — which is exactly why
+  Phase 5 snapshots every game to the volume at each turn end, and clients
+  auto-reconnect/resync. Design for it and the auto-stop is free money.
 
-If online multiplayer ever becomes a goal, that's the point a backend (or WebRTC
-with a free signaling relay) enters the picture — explicitly out of scope for v1.
+**Strictly-$0 alternative:** **Render.com free tier** runs the identical Node +
+WebSocket app for nothing. Trade-off: free services sleep after 15 min idle and
+cold-start in ~30–60 s (fine if you text Dad "game's booting"), and the free disk
+is ephemeral — so point `store.ts` at a free external store (e.g. Turso/Neon free
+tier) or accept losing unfinished games on redeploys. The code is identical either
+way — it's just where the container runs, so switching later is a 30-minute job.
+
+Also fine: **Railway** (usage-based, ~$1/mo at this scale, $5 credit granted
+monthly on the Hobby trial), or a free **Oracle Cloud** VM if you enjoy sysadmin.
+Cloudflare Workers + Durable Objects can do this on their free tier too, but the
+programming model diverges from plain Node — not worth it for v1.
 
 ---
 
@@ -220,16 +306,18 @@ with a free signaling relay) enters the picture — explicitly out of scope for 
 - One phase per session (or less). Always leave `main` deployable; do feature work
   on branches if a phase is long.
 - Run `npm test` and `npm run build` before every commit.
-- Keep `core/` browser-free and deterministic; any new rule gets a unit test.
+- Keep `core/` browser-free, network-free, and deterministic; any new rule gets a
+  unit test. All player input stays serializable commands through `session/`.
 - Keep all tunable numbers in `core/rules.ts`.
 - Update the checklist below as phases complete.
 
 ## 7. Progress
 
-- [ ] Phase 0 — Scaffold & GitHub Pages deploy
+- [ ] Phase 0 — Scaffold, server skeleton & Fly.io deploy
 - [ ] Phase 1 — Map generation, rendering, fog of war
 - [ ] Phase 2 — Armies, cities, combat, capture (first playable)
 - [ ] Phase 3 — Navy & air force
 - [ ] Phase 4 — AI opponent
-- [ ] Phase 5 — Retro UI polish, sound, save/load
-- [ ] Phase 6 — Ship it & extras
+- [ ] Phase 5 — Online PvP over WebSockets
+- [ ] Phase 6 — Retro UI polish, sound, save/load
+- [ ] Phase 7 — Ship it & extras
