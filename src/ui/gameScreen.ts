@@ -77,6 +77,7 @@ export function createGameScreen(
   const unitPanel = el<HTMLDivElement>('unit-panel');
   const unitPanelText = el<HTMLSpanElement>('unit-panel-text');
   const unitPanelActions = el<HTMLSpanElement>('unit-panel-actions');
+  const btnLoad = el<HTMLButtonElement>('btn-load');
   const btnSleep = el<HTMLButtonElement>('btn-sleep');
   const btnSkip = el<HTMLButtonElement>('btn-skip');
   const toasts = el<HTMLDivElement>('toasts');
@@ -182,7 +183,42 @@ export function createGameScreen(
       // Sleep/Skip only make sense for a unit that can still act.
       const canAct = myTurn() && unit.aboard === null && unit.movesLeft > 0;
       unitPanelActions.style.display = canAct ? 'flex' : 'none';
+      // Load shows only for a transport/carrier with loadable units on its tile.
+      btnLoad.classList.toggle('hidden', loadableFor(unit).length === 0);
     }
+  }
+
+  /** Units of yours sharing `carrier`'s tile that could board it. */
+  function loadableFor(carrier: ViewUnit): ViewUnit[] {
+    if (view === null) return [];
+    const cap = UNIT_SPECS[carrier.type].capacity;
+    if (cap === undefined) return [];
+    const room = cap.count - carrier.cargoCount;
+    if (room <= 0) return [];
+    return view.units
+      .filter(
+        (u) =>
+          u.owner === view!.you &&
+          u.aboard === null &&
+          u.id !== carrier.id &&
+          u.x === carrier.x &&
+          u.y === carrier.y &&
+          u.type === cap.type &&
+          u.movesLeft > 0,
+      )
+      .slice(0, room);
+  }
+
+  /** A transport/carrier on the same tile that `unit` could board. */
+  function carrierFor(unit: ViewUnit): ViewUnit | undefined {
+    if (view === null || unit.aboard !== null || unit.movesLeft <= 0) return undefined;
+    return view.units.find((c) => c.x === unit.x && c.y === unit.y && canBoard(unit, c));
+  }
+
+  /** All of your units on a tile (surface and cargo) for the stack panel. */
+  function stackUnitsAt(x: number, y: number): ViewUnit[] {
+    if (view === null) return [];
+    return view.units.filter((u) => u.owner === view!.you && u.x === x && u.y === y);
   }
 
   function toast(text: string): void {
@@ -191,6 +227,23 @@ export function createGameScreen(
     node.textContent = text;
     toasts.appendChild(node);
     setTimeout(() => node.remove(), 5000);
+  }
+
+  // Cities you capture with no production set get queued so the game prompts
+  // you to choose what each one builds.
+  const productionQueue: number[] = [];
+
+  function promptNextProduction(): void {
+    if (!productionDialog.classList.contains('hidden')) return;
+    if (view === null || !myTurn()) return;
+    while (productionQueue.length > 0) {
+      const cityId = productionQueue.shift() as number;
+      const city = view.yourCities.find((c) => c.id === cityId);
+      if (city !== undefined && city.production === null) {
+        openProduction(cityId);
+        return;
+      }
+    }
   }
 
   function handleEvents(events: GameEvent[]): void {
@@ -206,6 +259,7 @@ export function createGameScreen(
         else playBattleLost();
       } else if (event.kind === 'capture' && event.by === view.you) {
         playCapture();
+        productionQueue.push(event.cityId);
       } else if (event.kind === 'victory') {
         if (event.winner === view.you) playVictory();
         else playDefeat();
@@ -306,6 +360,7 @@ export function createGameScreen(
           session.send({ type: 'setProduction', cityId: productionCityId, unit: type });
         }
         productionDialog.classList.add('hidden');
+        promptNextProduction();
       });
       productionList.appendChild(button);
     }
@@ -356,6 +411,19 @@ export function createGameScreen(
       const actions = document.createElement('span');
       actions.className = 'row-actions';
       if (myTurn() && u.aboard === null && u.movesLeft > 0) {
+        // Board a transport/carrier sharing this tile (e.g. loading in a city).
+        const carrier = carrierFor(u);
+        if (carrier !== undefined) {
+          const board = document.createElement('button');
+          board.type = 'button';
+          board.textContent = 'Board';
+          board.addEventListener('click', (e) => {
+            e.stopPropagation();
+            session.send({ type: 'board', unitId: u.id, carrierId: carrier.id });
+            openStack(stackUnitsAt(u.x, u.y));
+          });
+          actions.append(board);
+        }
         const sentry = document.createElement('button');
         sentry.type = 'button';
         sentry.textContent = 'Sleep';
@@ -696,6 +764,19 @@ export function createGameScreen(
     { signal },
   );
   btnNextUnit.addEventListener('click', selectNextUnit, { signal });
+  btnLoad.addEventListener(
+    'click',
+    () => {
+      const carrier = selectedUnit();
+      if (carrier === undefined || !myTurn()) return;
+      const loadable = loadableFor(carrier);
+      for (const u of loadable) {
+        session.send({ type: 'board', unitId: u.id, carrierId: carrier.id });
+      }
+      if (loadable.length > 0) toast(`Loaded ${loadable.length} aboard.`);
+    },
+    { signal },
+  );
   btnSleep.addEventListener(
     'click',
     () => {
@@ -739,7 +820,10 @@ export function createGameScreen(
   );
   el<HTMLButtonElement>('btn-close-production').addEventListener(
     'click',
-    () => productionDialog.classList.add('hidden'),
+    () => {
+      productionDialog.classList.add('hidden');
+      promptNextProduction();
+    },
     { signal },
   );
   el<HTMLButtonElement>('btn-close-stack').addEventListener(
@@ -783,6 +867,7 @@ export function createGameScreen(
     if (next.winner !== null) showVictory();
     void hadView;
     requestRender();
+    promptNextProduction();
     maybeAutoAdvance();
   });
   session.onError((message) => toast(message));

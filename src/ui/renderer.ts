@@ -348,7 +348,6 @@ export function renderGame(
   const sorted = [...view.units].sort(
     (a, b) => Number(a.owner === view.you) - Number(b.owner === view.you),
   );
-  const badgedTiles = new Set<number>();
   for (const unit of sorted) {
     if (unit.aboard !== null) continue;
     if (unit.x < x0 || unit.x > x1 || unit.y < y0 || unit.y > y1) continue;
@@ -358,25 +357,58 @@ export function renderGame(
     ctx.globalAlpha = done ? 0.5 : 1;
     drawUnit(ctx, screenX(unit.x), screenY(unit.y), ts, unit, view.you, isSel);
     ctx.globalAlpha = 1;
-
-    // Stack badge (top-left): drawn once per multi-unit tile.
-    const key = tileIndex(unit.x, unit.y, view.width);
-    const count = stackCounts.get(key) ?? 1;
-    if (count > 1 && !badgedTiles.has(key) && ts >= 12) {
-      badgedTiles.add(key);
-      const px = screenX(unit.x);
-      const py = screenY(unit.y);
-      const badge = Math.max(9, Math.round(ts * 0.42));
-      ctx.fillStyle = PALETTE.selection;
-      ctx.fillRect(px, py, badge, badge);
-      ctx.strokeStyle = PALETTE.outline;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(px + 0.5, py + 0.5, badge - 1, badge - 1);
-      ctx.fillStyle = PALETTE.outline;
-      ctx.font = `bold ${badge - 3}px "Courier New", monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`${count}`, px + badge / 2, py + badge / 2 + 1);
-    }
   }
+
+  // City marker: a little roof pip in the top-right corner, drawn on top of
+  // units so you can always tell a city sits under a garrison.
+  for (const city of view.cities) {
+    if (city.x < x0 || city.x > x1 || city.y < y0 || city.y > y1) continue;
+    if ((stackCounts.get(tileIndex(city.x, city.y, view.width)) ?? 0) === 0) continue;
+    drawCityPip(ctx, screenX(city.x), screenY(city.y), ts, city.owner, view.you);
+  }
+
+  // Stack count badge (top-left): how many units share a tile.
+  for (const [key, count] of stackCounts) {
+    if (count < 2 || ts < 11) continue;
+    const cx = key % view.width;
+    const cy = Math.floor(key / view.width);
+    if (cx < x0 || cx > x1 || cy < y0 || cy > y1) continue;
+    const px = screenX(cx);
+    const py = screenY(cy);
+    const badge = Math.max(9, Math.round(ts * 0.42));
+    ctx.fillStyle = PALETTE.selection;
+    ctx.fillRect(px, py, badge, badge);
+    ctx.strokeStyle = PALETTE.outline;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px + 0.5, py + 0.5, badge - 1, badge - 1);
+    ctx.fillStyle = PALETTE.outline;
+    ctx.font = `bold ${badge - 3}px "Courier New", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${count}`, px + badge / 2, py + badge / 2 + 1);
+  }
+}
+
+/** Small roof-shaped city marker in a tile's top-right corner. */
+function drawCityPip(
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  ts: number,
+  owner: number,
+  you: number,
+): void {
+  const size = Math.max(6, ts * 0.34);
+  const x = px + ts - size - 1;
+  const y = py + 1;
+  ctx.fillStyle = PALETTE.outline;
+  ctx.fillRect(x - 1, y - 1, size + 2, size + 2);
+  ctx.fillStyle = owner === NEUTRAL ? PALETTE.neutral : owner === you ? PALETTE.you : PALETTE.enemy;
+  ctx.fillRect(x, y + size * 0.42, size, size * 0.58); // house body
+  ctx.beginPath(); // roof
+  ctx.moveTo(x - 0.5, y + size * 0.5);
+  ctx.lineTo(x + size / 2, y);
+  ctx.lineTo(x + size + 0.5, y + size * 0.5);
+  ctx.closePath();
+  ctx.fill();
 }

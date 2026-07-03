@@ -243,6 +243,56 @@ describe('transports', () => {
       expect(state.units.has(rider.id)).toBe(false);
     }
   });
+
+  it('armies board a transport sharing their tile (loading from a city)', () => {
+    const state = makeTestState();
+    // A coastal city with a transport and two armies all on the same tile.
+    const city = state.world.cities[state.world.starts[0]]!; // (2,2), made coastal below
+    // Ensure the city tile is coastal by putting sea next to it.
+    state.world.terrain[tileIndex(city.x, city.y + 1, state.world.width)] = TERRAIN_SEA;
+    const transport = spawnUnit(state, 'transport', 0, city.x, city.y);
+    const armyA = spawnUnit(state, 'army', 0, city.x, city.y);
+    const armyB = spawnUnit(state, 'army', 0, city.x, city.y);
+    armyA.movesLeft = 1;
+    armyB.movesLeft = 1;
+
+    expect(
+      applyCommand(state, 0, { type: 'board', unitId: armyA.id, carrierId: transport.id }).ok,
+    ).toBe(true);
+    expect(
+      applyCommand(state, 0, { type: 'board', unitId: armyB.id, carrierId: transport.id }).ok,
+    ).toBe(true);
+    expect(armyA.aboard).toBe(transport.id);
+    expect(armyB.aboard).toBe(transport.id);
+    expect(cargoOf(state, transport.id).length).toBe(2);
+
+    // The loaded armies move with the transport.
+    transport.movesLeft = 2;
+    applyCommand(state, 0, {
+      type: 'move',
+      unitId: transport.id,
+      to: { x: city.x, y: city.y + 1 },
+    });
+    expect(armyA.x).toBe(city.x);
+    expect(armyA.y).toBe(city.y + 1);
+  });
+
+  it('rejects boarding a full or mismatched carrier', () => {
+    const state = makeTestState();
+    const transport = spawnUnit(state, 'transport', 0, 5, SEA_Y);
+    const fighter = spawnUnit(state, 'fighter', 0, 5, SEA_Y);
+    fighter.movesLeft = 4;
+    // Transports carry armies, not fighters.
+    expect(
+      applyCommand(state, 0, { type: 'board', unitId: fighter.id, carrierId: transport.id }).ok,
+    ).toBe(false);
+    // Not on the same tile.
+    const farArmy = spawnUnit(state, 'army', 0, 3, LAND_Y);
+    farArmy.movesLeft = 1;
+    expect(
+      applyCommand(state, 0, { type: 'board', unitId: farArmy.id, carrierId: transport.id }).ok,
+    ).toBe(false);
+  });
 });
 
 describe('fighters', () => {
@@ -286,6 +336,27 @@ describe('fog-honest views', () => {
     const first = viewFor(state, 0);
     expect(first.events.some((e) => e.kind === 'victory')).toBe(true);
     expect(viewFor(state, 0).events.length).toBe(0);
+  });
+
+  it('delivers a capture event (by + cityId) to the capturing player — the UI production prompt keys off this', () => {
+    const state = makeTestState();
+    const cityId = state.world.starts[1];
+    state.cityOwners[cityId] = NEUTRAL;
+    const city = state.world.cities[cityId]!;
+    // Assault until captured (each attempt spawns a fresh adjacent army).
+    for (let i = 0; i < 80 && state.cityOwners[cityId] !== 0; i++) {
+      const army = spawnUnit(state, 'army', 0, city.x - 1, city.y);
+      army.movesLeft = 1;
+      applyCommand(state, 0, { type: 'move', unitId: army.id, to: { x: city.x, y: city.y } });
+    }
+    expect(state.cityOwners[cityId]).toBe(0);
+    const view = viewFor(state, 0);
+    const capture = view.events.find((e) => e.kind === 'capture');
+    expect(capture).toBeDefined();
+    expect(capture).toMatchObject({ kind: 'capture', by: 0, cityId });
+    // The captured city has no production yet, so the UI would prompt for it.
+    expect(state.production[cityId]).toBe(null);
+    expect(view.yourCities.some((c) => c.id === cityId && c.production === null)).toBe(true);
   });
 });
 

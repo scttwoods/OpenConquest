@@ -94,10 +94,13 @@
               destination — a neighboring tile moves/attacks at once, a far tile sets a
               path (drawn as a line) the unit follows over several turns. Units that
               have finished acting this turn are dimmed. Armies capture cities (about
-              half of assaults succeed). Fighters fly anywhere but must refuel at cities
-              or Carriers. Armies board an adjacent Transport to cross the sea.
-              When several units share a tile it shows a count badge — tap it to
-              open a panel listing each unit's state and pick one.
+              half of assaults succeed), and capturing one prompts you to choose what
+              it builds. Fighters fly anywhere but must refuel at cities or Carriers.
+              To ship Armies across the sea, put them in a coastal city with a Transport,
+              select the Transport and tap <b>Load</b> (or use <b>Board</b> in the stack
+              panel), then sail. When several units share a tile it shows a count badge —
+              tap it to open a panel listing each unit's state and pick one. A little
+              roof marker in a tile's corner means a city sits underneath.
             </p>
             <div class="help-table-wrap">
               <table id="help-units"></table>
@@ -165,6 +168,7 @@
       <div id="unit-panel" class="hidden">
         <span id="unit-panel-text"></span>
         <span id="unit-panel-actions">
+          <button id="btn-load" type="button" class="hidden">Load</button>
           <button id="btn-sleep" type="button">Sleep</button>
           <button id="btn-skip" type="button">Skip</button>
         </span>

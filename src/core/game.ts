@@ -27,6 +27,9 @@ export type Command =
       unitId: number;
       order: 'sentry' | 'awake' | 'skip' | { moveTo: { x: number; y: number } };
     }
+  // Load a unit onto a transport/carrier already sharing its tile (e.g. both
+  // sitting in a coastal city, where there's no tile to "move onto").
+  | { type: 'board'; unitId: number; carrierId: number }
   | { type: 'endTurn' }
   | { type: 'surrender' };
 
@@ -437,6 +440,27 @@ export function applyCommand(state: GameState, player: PlayerId, command: Comman
         unit.dest = { x: dest.x, y: dest.y };
         if (unit.aboard === null) runMoveToOrder(state, unit);
       }
+      refreshAllFog(state);
+      return OK;
+    }
+
+    case 'board': {
+      const unit = state.units.get(command.unitId);
+      const carrier = state.units.get(command.carrierId);
+      if (unit === undefined || unit.owner !== player) return fail('No such unit');
+      if (carrier === undefined || carrier.owner !== player) return fail('No such transport');
+      if (unit.aboard !== null) return fail('Already aboard');
+      if (unit.movesLeft <= 0) return fail('No moves left');
+      if (unit.x !== carrier.x || unit.y !== carrier.y) return fail('Not on the same tile');
+      const cap = spec(carrier.type).capacity;
+      if (cap === undefined || cap.type !== unit.type)
+        return fail(`${spec(carrier.type).name} cannot carry that`);
+      if (cargoOf(state, carrier.id).length >= cap.count) return fail('Transport is full');
+      unit.aboard = carrier.id;
+      unit.movesLeft = 0;
+      unit.mode = 'awake';
+      unit.dest = null;
+      if (unit.type === 'fighter') unit.fuel = spec('fighter').fuel ?? 0;
       refreshAllFog(state);
       return OK;
     }
