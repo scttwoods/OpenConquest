@@ -9,8 +9,9 @@
   <body>
     <div id="app">
       <canvas id="game-canvas"></canvas>
+
       <div id="title-screen">
-        <div class="title-window">
+        <div class="mac-window">
           <div class="title-bar"><span class="title-bar-text">OpenConquest</span></div>
           <div class="title-body">
             <h1>OpenConquest</h1>
@@ -23,6 +24,38 @@
             <p id="status-line" role="status">&nbsp;</p>
           </div>
         </div>
+      </div>
+
+      <div id="dialog-layer" class="hidden">
+        <div class="mac-window">
+          <div class="title-bar"><span class="title-bar-text">New Game</span></div>
+          <div class="dialog-body">
+            <label class="field">
+              <span>Seed</span>
+              <input id="input-seed" type="text" placeholder="(random)" autocomplete="off" />
+            </label>
+            <fieldset class="field">
+              <legend>Map size</legend>
+              <label><input type="radio" name="map-size" value="small" /> Small</label>
+              <label><input type="radio" name="map-size" value="medium" checked /> Medium</label>
+              <label><input type="radio" name="map-size" value="large" /> Large</label>
+            </fieldset>
+            <div class="dialog-actions">
+              <button id="btn-cancel-game" type="button">Cancel</button>
+              <button id="btn-start-game" type="button" class="default-btn">Start</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="hud" class="hidden">
+        <span id="hud-text"></span>
+        <button id="btn-menu" type="button">Menu</button>
+      </div>
+
+      <div id="minimap-window" class="mac-window hidden">
+        <div class="title-bar"><span class="title-bar-text">Map</span></div>
+        <canvas id="minimap" width="220" height="140"></canvas>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
