@@ -88,6 +88,8 @@ export function createGameScreen(
   const stackDialog = el<HTMLDivElement>('stack-dialog');
   const stackTitle = el<HTMLSpanElement>('stack-title');
   const stackList = el<HTMLDivElement>('stack-list');
+  const loadDialog = el<HTMLDivElement>('load-dialog');
+  const loadMessage = el<HTMLParagraphElement>('load-message');
   const victoryOverlay = el<HTMLDivElement>('victory-overlay');
   const victoryText = el<HTMLHeadingElement>('victory-text');
 
@@ -483,6 +485,40 @@ export function createGameScreen(
     }
   }
 
+  // When a transport/carrier is ordered off a tile that still holds loose
+  // troops it could carry, offer to bring them along before it leaves.
+  let pendingCarrierMove: {
+    carrierId: number;
+    to: { x: number; y: number };
+    adjacent: boolean;
+    cargoIds: number[];
+  } | null = null;
+
+  function sendMoveOrOrder(unitId: number, to: { x: number; y: number }, adjacent: boolean): void {
+    if (adjacent) session.send({ type: 'move', unitId, to });
+    else session.send({ type: 'order', unitId, order: { moveTo: to } });
+  }
+
+  /** Issue a move for the selected unit — prompting first if it's a loaded-
+   *  capable ship leaving loose troops behind. */
+  function moveSelected(sel: ViewUnit, to: { x: number; y: number }, adjacent: boolean): void {
+    if (!adjacent && sel.aboard !== null) return;
+    const loadable = loadableFor(sel);
+    if (loadable.length > 0) {
+      const cap = UNIT_SPECS[sel.type].capacity;
+      const n = loadable.length;
+      const noun =
+        cap?.type === 'army' ? (n === 1 ? 'army' : 'armies') : n === 1 ? 'plane' : 'planes';
+      pendingCarrierMove = { carrierId: sel.id, to, adjacent, cargoIds: loadable.map((u) => u.id) };
+      loadMessage.textContent =
+        `${UNIT_SPECS[sel.type].name} is leaving with ${n} ${noun} still ashore. ` +
+        `Take ${n === 1 ? 'it' : 'them'} aboard?`;
+      loadDialog.classList.remove('hidden');
+      return;
+    }
+    sendMoveOrOrder(sel.id, to, adjacent);
+  }
+
   // ---------- Pointer input: one finger pans/taps, two fingers pinch-zoom ----------
   const pointers = new Map<number, { x: number; y: number }>();
   let dragMoved = false;
@@ -551,9 +587,7 @@ export function createGameScreen(
       // move order.) This must come before unit-selection so tapping an
       // occupied city moves the unit in rather than selecting the occupant.
       if (cityHere !== undefined) {
-        if (adjacent) session.send({ type: 'move', unitId: sel.id, to: tile });
-        else if (sel.aboard === null)
-          session.send({ type: 'order', unitId: sel.id, order: { moveTo: tile } });
+        moveSelected(sel, tile, adjacent);
         return;
       }
       // Board an adjacent Transport/Carrier.
@@ -567,14 +601,9 @@ export function createGameScreen(
         selectOrStack(selectableHere);
         return;
       }
-      // Adjacent enemy/empty tile = a direct move or attack.
-      if (adjacent) {
-        session.send({ type: 'move', unitId: sel.id, to: tile });
-        return;
-      }
-      // Empty distant tile = a standing move order.
-      if (sel.aboard === null) {
-        session.send({ type: 'order', unitId: sel.id, order: { moveTo: tile } });
+      // Adjacent enemy/empty tile = a direct move or attack; distant = order.
+      if (adjacent || sel.aboard === null) {
+        moveSelected(sel, tile, adjacent);
         return;
       }
     }
@@ -737,6 +766,8 @@ export function createGameScreen(
           selectedId = null;
           productionDialog.classList.add('hidden');
           stackDialog.classList.add('hidden');
+          loadDialog.classList.add('hidden');
+          pendingCarrierMove = null;
           requestRender();
           break;
       }
@@ -860,6 +891,37 @@ export function createGameScreen(
     () => stackDialog.classList.add('hidden'),
     { signal },
   );
+  el<HTMLButtonElement>('btn-load-take').addEventListener(
+    'click',
+    () => {
+      loadDialog.classList.add('hidden');
+      const p = pendingCarrierMove;
+      pendingCarrierMove = null;
+      if (p === null) return;
+      for (const id of p.cargoIds)
+        session.send({ type: 'board', unitId: id, carrierId: p.carrierId });
+      sendMoveOrOrder(p.carrierId, p.to, p.adjacent);
+    },
+    { signal },
+  );
+  el<HTMLButtonElement>('btn-load-leave').addEventListener(
+    'click',
+    () => {
+      loadDialog.classList.add('hidden');
+      const p = pendingCarrierMove;
+      pendingCarrierMove = null;
+      if (p !== null) sendMoveOrOrder(p.carrierId, p.to, p.adjacent);
+    },
+    { signal },
+  );
+  el<HTMLButtonElement>('btn-load-cancel').addEventListener(
+    'click',
+    () => {
+      loadDialog.classList.add('hidden');
+      pendingCarrierMove = null; // transport stays put, still selected
+    },
+    { signal },
+  );
   el<HTMLButtonElement>('btn-victory-menu').addEventListener(
     'click',
     () => {
@@ -948,6 +1010,7 @@ export function createGameScreen(
       unitPanel.classList.add('hidden');
       productionDialog.classList.add('hidden');
       stackDialog.classList.add('hidden');
+      loadDialog.classList.add('hidden');
       victoryOverlay.classList.add('hidden');
       chatWindow.classList.add('hidden');
       toasts.innerHTML = '';

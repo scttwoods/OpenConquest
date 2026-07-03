@@ -243,6 +243,7 @@ fieldset.field legend {
 #help-dialog,
 #production-dialog,
 #stack-dialog,
+#load-dialog,
 #victory-overlay {
   position: absolute;
   inset: 0;
