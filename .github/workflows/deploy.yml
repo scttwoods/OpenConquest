@@ -2,7 +2,7 @@ name: CI & Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/strategic-conquest-web-uojo80]
   pull_request:
 
 jobs:
@@ -22,7 +22,11 @@ jobs:
 
   deploy:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Auto-deploy every push to a deployed branch (once tests pass).
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' ||
+       github.ref == 'refs/heads/claude/strategic-conquest-web-uojo80')
     runs-on: ubuntu-latest
     concurrency: fly-deploy
     steps:

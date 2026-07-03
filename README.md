@@ -47,18 +47,24 @@ npm start          # serves everything on :8080
 
 Or with Docker: `docker build -t openconquest . && docker run -p 8080:8080 openconquest`
 
-## Deploying to Fly.io (one-time setup)
+## Deploying to Fly.io
 
-1. Install [flyctl](https://fly.io/docs/flyctl/install/) and `fly auth login`.
-2. `fly launch --no-deploy` — reuse the checked-in `fly.toml` when prompted
-   (pick your own app name; update `app =` in `fly.toml` to match).
-3. `fly volumes create games_data --size 1` (persistent storage for PvP games).
-4. `fly deploy` — first manual deploy.
-5. `fly tokens create deploy` → add the token as a `FLY_API_TOKEN` secret in the
-   GitHub repo (Settings → Secrets and variables → Actions).
+Deploys are automatic: every push to a deployed branch runs the tests and, if
+they pass, ships to Fly via `.github/workflows/deploy.yml` — no clicking Deploy
+in the Fly dashboard. This needs a one-time secret:
 
-After that, every push to `main` runs tests and deploys automatically via
-`.github/workflows/deploy.yml`.
+1. Create a deploy token: `fly tokens create deploy` (or in the Fly dashboard
+   under the app → Tokens).
+2. In GitHub, add it as a repository secret named `FLY_API_TOKEN`
+   (Settings → Secrets and variables → Actions → New repository secret).
+
+After that, `git push` deploys. The deployed branches are listed in the
+workflow's `on.push.branches`; add or change them there.
+
+First-time app setup (only if the app doesn't exist yet): install
+[flyctl](https://fly.io/docs/flyctl/install/), `fly auth login`,
+`fly launch --no-deploy` (reuse the checked-in `fly.toml`, matching `app =` to
+your app name), then `fly deploy` once.
 
 ## Project layout
 
