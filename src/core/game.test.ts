@@ -93,7 +93,7 @@ describe('movement & turn rules', () => {
     expect(army.x).toBe(5);
   });
 
-  it('moveTo standing orders persist across turns', () => {
+  it('moveTo orders step immediately, then again at the end of each turn', () => {
     const state = makeTestState();
     const army = spawnUnit(state, 'army', 0, 0, 0);
     army.movesLeft = 1;
@@ -102,10 +102,47 @@ describe('movement & turn rules', () => {
         .ok,
     ).toBe(true);
     expect(army.x).toBe(1); // stepped once immediately
+
     applyCommand(state, 0, { type: 'endTurn' });
     applyCommand(state, 1, { type: 'endTurn' });
-    expect(army.x).toBe(2); // auto-stepped at turn start
+    // Back to player 0: the ordered unit has NOT moved yet this turn and keeps
+    // its move, so it can be redirected or cancelled before it travels.
+    expect(army.x).toBe(1);
+    expect(army.movesLeft).toBe(1);
     expect(army.mode).toBe('moveto');
+
+    applyCommand(state, 0, { type: 'endTurn' }); // now it travels
+    expect(army.x).toBe(2);
+  });
+
+  it('an order can be cancelled, and a manual move overrides the plan', () => {
+    const state = makeTestState();
+    const army = spawnUnit(state, 'army', 0, 0, 0);
+    army.movesLeft = 1;
+    applyCommand(state, 0, { type: 'order', unitId: army.id, order: { moveTo: { x: 5, y: 0 } } });
+    applyCommand(state, 0, { type: 'endTurn' });
+    applyCommand(state, 1, { type: 'endTurn' });
+    expect(army.mode).toBe('moveto');
+
+    // Cancel: the unit holds position instead of continuing.
+    applyCommand(state, 0, { type: 'order', unitId: army.id, order: 'awake' });
+    expect(army.mode).toBe('awake');
+    expect(army.dest).toBe(null);
+    const restX = army.x;
+    applyCommand(state, 0, { type: 'endTurn' });
+    applyCommand(state, 1, { type: 'endTurn' });
+    expect(army.x).toBe(restX); // did not travel
+
+    // Redirect via a manual one-tile move: overrides any plan.
+    applyCommand(state, 0, { type: 'order', unitId: army.id, order: { moveTo: { x: 10, y: 5 } } });
+    applyCommand(state, 0, { type: 'endTurn' });
+    applyCommand(state, 1, { type: 'endTurn' });
+    expect(army.mode).toBe('moveto');
+    const before = { x: army.x, y: army.y };
+    applyCommand(state, 0, { type: 'move', unitId: army.id, to: { x: before.x, y: before.y + 1 } });
+    expect(army.y).toBe(before.y + 1);
+    expect(army.mode).toBe('awake');
+    expect(army.dest).toBe(null);
   });
 });
 

@@ -92,8 +92,9 @@
               Tap a unit to select it (it stays highlighted); tap it again to deselect.
               Tap another of your units to switch to it. With a unit selected, tap a
               destination — a neighboring tile moves/attacks at once, a far tile sets a
-              path (drawn as a line) the unit follows over several turns. Units that
-              have finished acting this turn are dimmed. Armies capture cities (about
+              path (drawn as a line) the unit follows over several turns. To change a
+              plan, select the unit and tap a new destination, or tap <b>Cancel Move</b>
+              to stop it. Units that have finished acting this turn are dimmed. Armies capture cities (about
               half of assaults succeed), and capturing one prompts you to choose what
               it builds. Fighters fly anywhere but must refuel at cities or Carriers.
               To ship Armies across the sea, put them in a coastal city with a Transport,
@@ -168,6 +169,7 @@
       <div id="unit-panel" class="hidden">
         <span id="unit-panel-text"></span>
         <span id="unit-panel-actions">
+          <button id="btn-cancel-move" type="button" class="hidden">Cancel Move</button>
           <button id="btn-load" type="button" class="hidden">Load</button>
           <button id="btn-sleep" type="button">Sleep</button>
           <button id="btn-skip" type="button">Skip</button>

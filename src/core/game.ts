@@ -335,7 +335,16 @@ function startTurn(state: GameState, player: PlayerId): void {
     }
   }
 
-  // Standing orders execute after upkeep.
+  refreshAllFog(state);
+}
+
+/**
+ * Advance every one of a player's units that is under a standing move order.
+ * This runs when the player ENDS their turn — not at the start — so that
+ * during the turn those units still have their moves and can be redirected or
+ * have their order cancelled.
+ */
+function executeStandingOrders(state: GameState, player: PlayerId): void {
   for (const unit of [...state.units.values()]) {
     if (unit.owner === player && unit.mode === 'moveto' && unit.aboard === null) {
       runMoveToOrder(state, unit);
@@ -404,7 +413,14 @@ export function applyCommand(state: GameState, player: PlayerId, command: Comman
     case 'move': {
       const unit = state.units.get(command.unitId);
       if (unit === undefined || unit.owner !== player) return fail('No such unit');
-      return moveStep(state, player, unit, command.to.x, command.to.y);
+      const result = moveStep(state, player, unit, command.to.x, command.to.y);
+      // A manual move overrides any standing plan, so the unit doesn't keep
+      // travelling toward an old destination afterwards.
+      if (result.ok && state.units.has(unit.id) && unit.aboard === null) {
+        unit.mode = unit.mode === 'sentry' ? 'sentry' : 'awake';
+        unit.dest = null;
+      }
+      return result;
     }
 
     case 'setProduction': {
@@ -466,6 +482,8 @@ export function applyCommand(state: GameState, player: PlayerId, command: Comman
     }
 
     case 'endTurn': {
+      // Units under standing move orders travel now, as the turn closes.
+      executeStandingOrders(state, player);
       crashStrandedFighters(state, player);
       checkVictory(state);
       if (state.winner !== null) return OK;

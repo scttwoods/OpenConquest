@@ -77,6 +77,7 @@ export function createGameScreen(
   const unitPanel = el<HTMLDivElement>('unit-panel');
   const unitPanelText = el<HTMLSpanElement>('unit-panel-text');
   const unitPanelActions = el<HTMLSpanElement>('unit-panel-actions');
+  const btnCancelMove = el<HTMLButtonElement>('btn-cancel-move');
   const btnLoad = el<HTMLButtonElement>('btn-load');
   const btnSleep = el<HTMLButtonElement>('btn-sleep');
   const btnSkip = el<HTMLButtonElement>('btn-skip');
@@ -180,12 +181,18 @@ export function createGameScreen(
       if (cargo !== null) bits.push(cargo);
       if (unit.aboard !== null) bits.push('aboard transport');
       if (unit.mode === 'sentry') bits.push('sleeping');
+      if (unit.mode === 'moveto') bits.push('moving');
       unitPanelText.textContent = bits.join(' · ');
+      const hasMoves = unit.aboard === null && unit.movesLeft > 0;
+      const hasPlan = unit.mode === 'moveto';
+      unitPanelActions.style.display = myTurn() && (hasMoves || hasPlan) ? 'flex' : 'none';
+      // Cancel Move only for a unit with a standing move order.
+      btnCancelMove.classList.toggle('hidden', !(myTurn() && hasPlan));
+      // Load only for a transport/carrier with loadable units on its tile.
+      btnLoad.classList.toggle('hidden', !(myTurn() && hasMoves && loadableFor(unit).length > 0));
       // Sleep/Skip only make sense for a unit that can still act.
-      const canAct = myTurn() && unit.aboard === null && unit.movesLeft > 0;
-      unitPanelActions.style.display = canAct ? 'flex' : 'none';
-      // Load shows only for a transport/carrier with loadable units on its tile.
-      btnLoad.classList.toggle('hidden', loadableFor(unit).length === 0);
+      btnSleep.classList.toggle('hidden', !(myTurn() && hasMoves));
+      btnSkip.classList.toggle('hidden', !(myTurn() && hasMoves));
     }
   }
 
@@ -774,6 +781,18 @@ export function createGameScreen(
     { signal },
   );
   btnNextUnit.addEventListener('click', selectNextUnit, { signal });
+  btnCancelMove.addEventListener(
+    'click',
+    () => {
+      const unit = selectedUnit();
+      if (unit !== undefined && myTurn() && unit.mode === 'moveto') {
+        // Clear the standing order; the unit holds position and stays selected
+        // (still with its move) so you can immediately give it something else.
+        session.send({ type: 'order', unitId: unit.id, order: 'awake' });
+      }
+    },
+    { signal },
+  );
   btnLoad.addEventListener(
     'click',
     () => {
