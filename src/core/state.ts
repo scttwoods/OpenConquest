@@ -1,5 +1,5 @@
 import { createRng, type Rng } from './rng';
-import { generateWorld, TERRAIN_SEA, type World } from './mapgen';
+import { generateWorld, type World } from './mapgen';
 import { createFog, refreshFog, type Fog, type VisionSource } from './fog';
 import { inBounds, tileIndex } from './grid';
 import { MAP_SIZES, UNIT_SPECS, VISION_CITY, type MapSizeKey, type UnitType } from './rules';
@@ -101,22 +101,9 @@ export function cityIdAt(state: GameState, x: number, y: number): number {
 
 /** Cities with at least one 8-adjacent sea tile can build and host ships. */
 export function isCoastalCity(world: World, cityId: number): boolean {
-  const city = world.cities[cityId];
-  if (city === undefined) return false;
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = city.x + dx;
-      const ny = city.y + dy;
-      if (
-        inBounds(nx, ny, world.width, world.height) &&
-        world.terrain[tileIndex(nx, ny, world.width)] === TERRAIN_SEA
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
+  // Precomputed at generation time: true only for cities beside genuine open
+  // sea, not the map-edge border ring. See generateWorld.
+  return world.coastal[cityId] ?? false;
 }
 
 export function spawnUnit(

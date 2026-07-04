@@ -21,6 +21,20 @@ export interface World {
   cityAt: Int32Array;
   /** City ids of the two starting cities: [player 0, player 1]. */
   starts: [number, number];
+  /**
+   * Whether each city (by id) is a port that can build ships. True only when
+   * the city touches genuine open sea — NOT merely the thin ocean border ring
+   * at the map edge, which is the map's boundary rather than a harbor.
+   */
+  coastal: boolean[];
+}
+
+/** Width of the guaranteed ocean border, and the keep-out zone for walks. */
+function borderMargin(width: number, height: number): { mx: number; my: number } {
+  return {
+    mx: Math.max(2, Math.floor(width * 0.06)),
+    my: Math.max(2, Math.floor(height * 0.06)),
+  };
 }
 
 export interface WorldGenOptions {
@@ -102,11 +116,11 @@ function landNeighbors8(terrain: Uint8Array, width: number, height: number, x: n
  * while filling one-tile gaps — so no filaments or 1-wide arms survive.
  * Border tiles are forced to sea to keep islands off the map edge.
  */
-function smooth(terrain: Uint8Array, width: number, height: number, margin: number): Uint8Array {
+function smooth(terrain: Uint8Array, width: number, height: number, mx: number, my: number): Uint8Array {
   const next = new Uint8Array(terrain.length);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (x < margin || y < margin || x >= width - margin || y >= height - margin) {
+      if (x < mx || y < my || x >= width - mx || y >= height - my) {
         continue; // border stays sea
       }
       const i = tileIndex(x, y, width);
@@ -129,9 +143,9 @@ function generateTerrain(rng: Rng, width: number, height: number): Uint8Array {
   let terrain: Uint8Array = new Uint8Array(width * height).fill(TERRAIN_SEA);
   const target = Math.floor(width * height * LAND_FRACTION);
   // Keep walks away from the map border so the world reads as an ocean map.
-  const marginX = Math.max(2, Math.floor(width * 0.06));
-  const marginY = Math.max(2, Math.floor(height * 0.06));
-  const margin = Math.min(marginX, marginY);
+  // Paint and smoothing share one margin so there is no thin sea "moat"
+  // between the land and the true edge — just a clean ocean border.
+  const { mx: marginX, my: marginY } = borderMargin(width, height);
   let land = 0;
 
   const paintBrush = (cx: number, cy: number): void => {
@@ -165,8 +179,8 @@ function generateTerrain(rng: Rng, width: number, height: number): Uint8Array {
   }
 
   // Two smoothing passes clean up coastlines and kill any thin arms.
-  terrain = smooth(terrain, width, height, margin);
-  terrain = smooth(terrain, width, height, margin);
+  terrain = smooth(terrain, width, height, marginX, marginY);
+  terrain = smooth(terrain, width, height, marginX, marginY);
   return terrain;
 }
 
@@ -282,7 +296,39 @@ export function generateWorld(rng: Rng, opts: WorldGenOptions): World {
     for (const city of cities) {
       cityAt[tileIndex(city.x, city.y, width)] = city.id;
     }
-    return { width, height, terrain, cities, cityAt, starts };
+
+    const coastal = computePorts(width, height, terrain, cities);
+    return { width, height, terrain, cities, cityAt, starts, coastal };
   }
   throw new Error(`Map generation failed for ${width}x${height} with ${cityCount} cities`);
+}
+
+/**
+ * A city is a port (can build ships) only if it touches genuine open sea — a
+ * sea tile inside the playable area, not the map-edge border ring, which is
+ * the map's boundary rather than a harbour. This is what stops edge cities
+ * with no real water beside them from building ships.
+ */
+export function computePorts(
+  width: number,
+  height: number,
+  terrain: Uint8Array,
+  cities: readonly City[],
+): boolean[] {
+  const { mx, my } = borderMargin(width, height);
+  const isOpenSea = (x: number, y: number): boolean =>
+    x >= mx &&
+    y >= my &&
+    x < width - mx &&
+    y < height - my &&
+    terrain[tileIndex(x, y, width)] === TERRAIN_SEA;
+  return cities.map((city) => {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        if (isOpenSea(city.x + dx, city.y + dy)) return true;
+      }
+    }
+    return false;
+  });
 }

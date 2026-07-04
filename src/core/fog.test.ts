@@ -23,6 +23,7 @@ function makeWorld(): World {
     cities: [{ id: 0, x: 5, y: 5 }],
     cityAt,
     starts: [0, 0],
+    coastal: [false],
   };
 }
 

@@ -9,7 +9,7 @@ import {
   NEUTRAL,
   type GameState,
 } from './state';
-import { TERRAIN_LAND, TERRAIN_SEA } from './mapgen';
+import { TERRAIN_LAND, TERRAIN_SEA, computePorts } from './mapgen';
 import { tileIndex } from './grid';
 import { UNIT_SPECS } from './rules';
 import { serializeGame, deserializeGame } from './save';
@@ -42,6 +42,8 @@ function makeTestState(): GameState {
   b.y = 2;
   world.cityAt[tileIndex(a.x, a.y, world.width)] = a.id;
   world.cityAt[tileIndex(b.x, b.y, world.width)] = b.id;
+  // Recompute port flags for the reshaped terrain (both cities sit inland).
+  world.coastal = computePorts(world.width, world.height, world.terrain, world.cities);
   // Recompute fog for the reshaped world so tests don't depend on the fog that
   // createGame happened to compute for the original (pre-bulldoze) map.
   refreshAllFog(state);
