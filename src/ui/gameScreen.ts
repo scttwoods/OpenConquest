@@ -91,6 +91,7 @@ export function createGameScreen(
   const loadDialog = el<HTMLDivElement>('load-dialog');
   const loadMessage = el<HTMLParagraphElement>('load-message');
   const victoryOverlay = el<HTMLDivElement>('victory-overlay');
+  const measureReadout = el<HTMLDivElement>('measure-readout');
   const victoryText = el<HTMLHeadingElement>('victory-text');
 
   const abort = new AbortController();
@@ -113,6 +114,12 @@ export function createGameScreen(
   }
   let autoTimer: ReturnType<typeof setTimeout> | null = null;
   let autoRun = 0;
+
+  // Press-and-hold ruler for measuring distances (e.g. planning Fighter range).
+  let measuring = false;
+  let measureAnchor: { x: number; y: number } | null = null;
+  let measureTarget: { x: number; y: number } | null = null;
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
 
   const viewSize = (): { w: number; h: number } => ({
     w: canvas.clientWidth,
@@ -142,6 +149,9 @@ export function createGameScreen(
     ctx.imageSmoothingEnabled = false;
     clampCamera(cam, view, w, h);
     renderGame(ctx, view, cam, w, h, selectedId);
+    if (measuring && measureAnchor !== null && measureTarget !== null) {
+      drawMeasureLine(ctx, measureAnchor, measureTarget);
+    }
     const mctx = minimapCanvas.getContext('2d');
     if (mctx !== null) {
       renderMinimap(mctx, view, cam, w, h, minimapCanvas.width, minimapCanvas.height);
@@ -534,13 +544,99 @@ export function createGameScreen(
     };
   }
 
+  function screenCenter(tx: number, ty: number): { x: number; y: number } {
+    return {
+      x: tx * cam.tileSize - cam.x + cam.tileSize / 2,
+      y: ty * cam.tileSize - cam.y + cam.tileSize / 2,
+    };
+  }
+
+  function drawMeasureLine(
+    ctx: CanvasRenderingContext2D,
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+  ): void {
+    const a = screenCenter(from.x, from.y);
+    const b = screenCenter(to.x, to.y);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.strokeStyle = '#ffe14d';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const p of [a, b]) {
+      ctx.fillStyle = '#ffe14d';
+      ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(p.x - 3, p.y - 3, 6, 6);
+    }
+    ctx.restore();
+  }
+
+  function updateMeasureReadout(clientX: number, clientY: number): void {
+    if (measureAnchor === null || measureTarget === null) {
+      measureReadout.classList.add('hidden');
+      return;
+    }
+    const dist = chebyshev(measureAnchor.x, measureAnchor.y, measureTarget.x, measureTarget.y);
+    const anchorUnit = selectedUnit();
+    let text = `${dist} ${dist === 1 ? 'tile' : 'tiles'}`;
+    if (anchorUnit !== undefined && anchorUnit.type === 'fighter') {
+      const after = anchorUnit.fuel - dist;
+      if (dist > anchorUnit.fuel) text += ` · out of range (fuel ${anchorUnit.fuel})`;
+      else if (after < dist) text += ` · fuel ${anchorUnit.fuel}→${after} · one way`;
+      else text += ` · fuel ${anchorUnit.fuel}→${after} · can return`;
+    } else if (anchorUnit !== undefined) {
+      const turns = Math.ceil(dist / UNIT_SPECS[anchorUnit.type].moves);
+      text += ` · ~${turns} ${turns === 1 ? 'turn' : 'turns'}`;
+    }
+    measureReadout.textContent = text;
+    measureReadout.style.left = `${clientX + 14}px`;
+    measureReadout.style.top = `${clientY + 14}px`;
+    measureReadout.classList.remove('hidden');
+  }
+
+  function startMeasuring(clientX: number, clientY: number): void {
+    if (view === null) return;
+    const anchor = selectedUnit();
+    const at = tileFromPointer({ clientX, clientY } as PointerEvent);
+    measureAnchor = anchor !== undefined ? { x: anchor.x, y: anchor.y } : at;
+    measureTarget = at;
+    measuring = true;
+    updateMeasureReadout(clientX, clientY);
+    requestRender();
+  }
+
+  function stopMeasuring(): void {
+    if (holdTimer !== null) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+    if (!measuring) return;
+    measuring = false;
+    measureAnchor = null;
+    measureTarget = null;
+    measureReadout.classList.add('hidden');
+    requestRender();
+  }
+
   /** Can the selected unit board this friendly transport/carrier? */
   function canBoard(sel: ViewUnit, target: ViewUnit): boolean {
     const cap = UNIT_SPECS[target.type].capacity;
     return cap !== undefined && cap.type === sel.type && target.cargoCount < cap.count;
   }
 
-  function handleClick(e: PointerEvent): void {
+  function handleClick(e: PointerEvent, forceSelect = false): void {
     if (view === null) return;
     const tile = tileFromPointer(e);
     if (tile.x < 0 || tile.y < 0 || tile.x >= view.width || tile.y >= view.height) return;
@@ -560,6 +656,18 @@ export function createGameScreen(
     const selectableHere = [...surfaceHere, ...cargoHere];
     const cityHere = view.yourCities.find((c) => c.x === tile.x && c.y === tile.y);
     const sel = selectedUnit();
+
+    // Shift-click / right-click always SELECTS the unit(s) here without moving —
+    // the way to pick a friendly unit on a tile you'd otherwise stack onto.
+    if (forceSelect) {
+      if (selectableHere.length > 0) selectOrStack(selectableHere);
+      else if (cityHere !== undefined) openProduction(cityHere.id);
+      else {
+        selectedId = null;
+        requestRender();
+      }
+      return;
+    }
 
     // 1) Tapping the selected unit's own tile. Several units here → open the
     //    stack panel to inspect/switch. A lone selected unit → deselect (or
@@ -595,15 +703,16 @@ export function createGameScreen(
         session.send({ type: 'move', unitId: sel.id, to: tile });
         return;
       }
-      // Tapping your own unit(s) selects/inspects instead of moving onto them.
-      // (This is the fix: selecting a new army no longer marches the old one.)
-      if (selectableHere.length > 0) {
-        selectOrStack(selectableHere);
-        return;
-      }
-      // Adjacent enemy/empty tile = a direct move or attack; distant = order.
+      // A plain tap on any other tile — including one holding your own units —
+      // moves/stacks there. Your units freely share a tile; to SELECT a unit
+      // on a tile instead, shift-click or right-click it.
       if (adjacent || sel.aboard === null) {
         moveSelected(sel, tile, adjacent);
+        return;
+      }
+      // A distant tap while riding a transport can only select here.
+      if (selectableHere.length > 0) {
+        selectOrStack(selectableHere);
         return;
       }
     }
@@ -645,9 +754,16 @@ export function createGameScreen(
         dragMoved = false;
         lastX = e.clientX;
         lastY = e.clientY;
+        // Hold in place (no drag) to start the measuring ruler.
+        const { clientX, clientY } = e;
+        holdTimer = setTimeout(() => {
+          holdTimer = null;
+          if (pointers.size === 1 && !dragMoved) startMeasuring(clientX, clientY);
+        }, 240);
       } else if (pointers.size === 2) {
         dragMoved = true; // a pinch is never a tap
         pinchDistance = pinchState().distance;
+        stopMeasuring(); // a second finger cancels measuring
       }
     },
     { signal },
@@ -675,9 +791,21 @@ export function createGameScreen(
       }
 
       if (pointers.size === 1) {
+        if (measuring) {
+          measureTarget = tileFromPointer(e);
+          updateMeasureReadout(e.clientX, e.clientY);
+          requestRender();
+          return;
+        }
         const dx = e.clientX - lastX;
         const dy = e.clientY - lastY;
-        if (Math.abs(dx) + Math.abs(dy) > 6) dragMoved = true;
+        if (Math.abs(dx) + Math.abs(dy) > 6) {
+          dragMoved = true;
+          if (holdTimer !== null) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+          }
+        }
         if (dragMoved) {
           cam.x -= dx;
           cam.y -= dy;
@@ -693,8 +821,17 @@ export function createGameScreen(
     'pointerup',
     (e) => {
       const wasPinching = pointers.size >= 2;
+      const wasMeasuring = measuring;
       pointers.delete(e.pointerId);
-      if (pointers.size === 0 && !dragMoved && !wasPinching) handleClick(e);
+      if (holdTimer !== null) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      if (wasMeasuring) {
+        if (pointers.size === 0) stopMeasuring();
+        return;
+      }
+      if (pointers.size === 0 && !dragMoved && !wasPinching) handleClick(e, e.shiftKey);
       if (pointers.size === 1) {
         // Pinch ended with one finger down: continue as a pan from here.
         const rest = [...pointers.values()][0];
@@ -706,7 +843,23 @@ export function createGameScreen(
     },
     { signal },
   );
-  canvas.addEventListener('pointercancel', (e) => pointers.delete(e.pointerId), { signal });
+  canvas.addEventListener(
+    'pointercancel',
+    (e) => {
+      pointers.delete(e.pointerId);
+      stopMeasuring();
+    },
+    { signal },
+  );
+  // Right-click selects the unit(s) under the cursor without moving.
+  canvas.addEventListener(
+    'contextmenu',
+    (e) => {
+      e.preventDefault();
+      handleClick(e as unknown as PointerEvent, true);
+    },
+    { signal },
+  );
 
   canvas.addEventListener(
     'wheel',
@@ -1006,6 +1159,7 @@ export function createGameScreen(
       abort.abort();
       if (raf !== 0) cancelAnimationFrame(raf);
       if (autoTimer !== null) clearTimeout(autoTimer);
+      if (holdTimer !== null) clearTimeout(holdTimer);
       session.dispose();
       unitPanel.classList.add('hidden');
       productionDialog.classList.add('hidden');
@@ -1013,6 +1167,7 @@ export function createGameScreen(
       loadDialog.classList.add('hidden');
       victoryOverlay.classList.add('hidden');
       chatWindow.classList.add('hidden');
+      measureReadout.classList.add('hidden');
       toasts.innerHTML = '';
       chatLog.innerHTML = '';
     },

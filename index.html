@@ -61,7 +61,9 @@
               <fieldset class="field">
                 <legend>Map size</legend>
                 <label><input type="radio" name="pvp-map-size" value="small" /> Small</label>
-                <label><input type="radio" name="pvp-map-size" value="medium" checked /> Medium</label>
+                <label
+                  ><input type="radio" name="pvp-map-size" value="medium" checked /> Medium</label
+                >
                 <label><input type="radio" name="pvp-map-size" value="large" /> Large</label>
               </fieldset>
               <div class="dialog-actions">
@@ -70,7 +72,13 @@
               <hr />
               <label class="field">
                 <span>Code</span>
-                <input id="input-join-code" type="text" placeholder="e.g. K7KMQ3" autocomplete="off" maxlength="6" />
+                <input
+                  id="input-join-code"
+                  type="text"
+                  placeholder="e.g. K7KMQ3"
+                  autocomplete="off"
+                  maxlength="6"
+                />
                 <button id="btn-pvp-join" type="button">Join</button>
               </label>
               <div class="dialog-actions">
@@ -88,27 +96,31 @@
           <div class="title-bar"><span class="title-bar-text">How to Play</span></div>
           <div class="dialog-body">
             <p>
-              Take every city. Cities build units — tap one of yours to choose what.
-              Tap a unit to select it (it stays highlighted); tap it again to deselect.
-              Tap another of your units to switch to it. With a unit selected, tap a
-              destination — a neighboring tile moves/attacks at once, a far tile sets a
-              path (drawn as a line) the unit follows over several turns. To change a
-              plan, select the unit and tap a new destination, or tap <b>Cancel Move</b>
-              to stop it. Units that have finished acting this turn are dimmed. Armies capture cities (about
-              half of assaults succeed), and capturing one prompts you to choose what
-              it builds. Fighters fly anywhere but must refuel at cities or Carriers.
-              To ship Armies across the sea, put them in a coastal city with a Transport,
-              select the Transport and tap <b>Load</b> (or use <b>Board</b> in the stack
-              panel), then sail. When several units share a tile it shows a count badge —
-              tap it to open a panel listing each unit's state and pick one. A little
-              roof marker in a tile's corner means a city sits underneath.
+              Take every city. Cities build units — tap one of yours to choose what. Tap a unit to
+              select it (it stays highlighted); tap it again to deselect. With a unit selected, tap
+              a destination — a neighboring tile moves/attacks at once, a far tile sets a path
+              (drawn as a line) the unit follows over several turns. Your own units can stack
+              together on any tile, so tapping a tile that already holds a friendly unit moves onto
+              it. To <b>select</b> a unit on such a tile instead of moving onto it,
+              <b>shift-click</b> or <b>right-click</b> it (or open the stack panel via its count
+              badge). Press and <b>hold</b> anywhere to measure distance — handy for checking
+              whether a Fighter can reach a target and still return. To change a plan, select the
+              unit and tap a new destination, or tap <b>Cancel Move</b> to stop it. Units that have
+              finished acting this turn are dimmed. Armies capture cities (about half of assaults
+              succeed), and capturing one prompts you to choose what it builds. Fighters fly
+              anywhere but must refuel at cities or Carriers. To ship Armies across the sea, put
+              them in a coastal city with a Transport, select the Transport and tap <b>Load</b> (or
+              use <b>Board</b> in the stack panel), then sail. When several units share a tile it
+              shows a count badge — tap it to open a panel listing each unit's state and pick one. A
+              little roof marker in a tile's corner means a city sits underneath.
             </p>
             <div class="help-table-wrap">
               <table id="help-units"></table>
             </div>
             <p class="help-keys">
               <b>n</b> next unit · <b>space</b> skip · <b>s</b> sleep · <b>Enter</b> end turn ·
-              <b>Esc</b> deselect · drag/arrows pan · wheel or pinch zoom · tap minimap to jump
+              <b>Esc</b> deselect · <b>shift/right-click</b> select · <b>hold</b> measure ·
+              drag/arrows pan · wheel or pinch zoom · tap minimap to jump
             </p>
             <p class="help-keys">
               <b>Auto: On</b> skips turns where nothing needs orders — the game fast-forwards to
@@ -123,7 +135,9 @@
 
       <div id="stack-dialog" class="hidden">
         <div class="mac-window">
-          <div class="title-bar"><span class="title-bar-text" id="stack-title">Units Here</span></div>
+          <div class="title-bar">
+            <span class="title-bar-text" id="stack-title">Units Here</span>
+          </div>
           <div class="dialog-body">
             <div id="stack-list" class="stack-list"></div>
             <div class="dialog-actions">
@@ -149,7 +163,9 @@
 
       <div id="production-dialog" class="hidden">
         <div class="mac-window">
-          <div class="title-bar"><span class="title-bar-text" id="production-title">City</span></div>
+          <div class="title-bar">
+            <span class="title-bar-text" id="production-title">City</span>
+          </div>
           <div class="dialog-body">
             <div id="production-list" class="production-list"></div>
             <div class="dialog-actions">
@@ -191,6 +207,8 @@
       </div>
 
       <div id="toasts"></div>
+
+      <div id="measure-readout" class="hidden"></div>
 
       <div id="minimap-window" class="mac-window hidden">
         <div class="title-bar"><span class="title-bar-text">Map</span></div>
