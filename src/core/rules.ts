@@ -104,7 +104,9 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     letter: 'D',
     domain: 'sea',
     moves: 3,
-    hits: 1,
+    // 2 hits: a proper escort that can trade with a transport or sub and live,
+    // not a paper boat that dies to the first unlucky roll.
+    hits: 2,
     buildTime: 15,
     vision: 1,
     damage: 1,

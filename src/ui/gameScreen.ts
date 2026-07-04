@@ -402,6 +402,29 @@ export function createGameScreen(
     window.addEventListener('click', kill, true);
   }
 
+  /** One-line "what makes this unit special" note for the production menu. */
+  function unitBlurb(type: UnitType): string {
+    const cap = UNIT_SPECS[type].capacity;
+    switch (type) {
+      case 'army':
+        return 'Captures cities; rides Transports';
+      case 'fighter':
+        return `Flies anywhere · fuel ${UNIT_SPECS.fighter.fuel} · must refuel at cities/Carriers`;
+      case 'transport':
+        return `Carries ${cap?.count ?? 6} Armies across the sea`;
+      case 'destroyer':
+        return 'Fast, sturdy escort · spots subs';
+      case 'submarine':
+        return 'Hidden unless adjacent · hits ships hard';
+      case 'cruiser':
+        return 'Tough all-round warship';
+      case 'carrier':
+        return `Floating airbase · hosts ${cap?.count ?? 8} Fighters`;
+      case 'battleship':
+        return 'The heaviest hitter afloat';
+    }
+  }
+
   function openProduction(cityId: number): void {
     if (view === null) return;
     const city = view.yourCities.find((c) => c.id === cityId);
@@ -414,11 +437,17 @@ export function createGameScreen(
       const s = UNIT_SPECS[type];
       if (s.domain === 'sea' && !city.coastal) continue;
       const button = document.createElement('button');
+      button.className = 'prod-row';
       const current = city.production?.type === type;
-      const progress = current
-        ? ` — ${city.production?.progress ?? 0}/${s.buildTime}`
-        : ` — ${s.buildTime} turns`;
-      button.textContent = `${s.name}${progress}${current ? ' ◀' : ''}`;
+      const build = current
+        ? `${city.production?.progress ?? 0}/${s.buildTime}`
+        : `${s.buildTime} turns`;
+      // Compact, scannable stats so choosing IS comparing.
+      button.innerHTML =
+        `<span class="prod-name">${s.name}${current ? ' <b>◀ building</b>' : ''}</span>` +
+        `<span class="prod-stats">⏳ ${build} · ➤ ${s.moves} move${s.moves === 1 ? '' : 's'} · ` +
+        `♥ ${s.hits} hit${s.hits === 1 ? '' : 's'} · ⚔ ${s.damage}</span>` +
+        `<span class="prod-blurb">${unitBlurb(type)}</span>`;
       button.addEventListener('click', () => {
         if (productionCityId !== null) {
           session.send({ type: 'setProduction', cityId: productionCityId, unit: type });
@@ -1138,6 +1167,15 @@ export function createGameScreen(
     () => {
       productionDialog.classList.add('hidden');
       promptNextProduction();
+    },
+    { signal },
+  );
+  el<HTMLButtonElement>('btn-production-help').addEventListener(
+    'click',
+    (e) => {
+      // Open the full unit comparison table over the production menu.
+      e.stopPropagation();
+      el<HTMLDivElement>('help-dialog').classList.remove('hidden');
     },
     { signal },
   );

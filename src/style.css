@@ -105,6 +105,31 @@ textarea {
   color: var(--paper);
 }
 
+/* "?" help box on the right of a title bar — mirror of the close box. */
+.help-box {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  line-height: 14px;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.help-box:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .title-bar-text {
   background: var(--paper);
   padding: 0 12px;
@@ -280,6 +305,11 @@ fieldset.field legend {
   z-index: 20;
 }
 
+/* Sits above the production dialog when opened from its "?" button. */
+#help-dialog {
+  z-index: 30;
+}
+
 .help-window {
   max-width: 560px;
 }
@@ -311,22 +341,44 @@ fieldset.field legend {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 260px;
+  min-width: 300px;
+  max-width: 92vw;
 }
 
-.production-list button {
+.production-list button.prod-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-family: inherit;
-  font-size: 14px;
-  padding: 5px 12px;
+  padding: 6px 12px;
   text-align: left;
   background: var(--paper);
+  color: var(--ink);
   border: 2px solid var(--ink);
   cursor: pointer;
 }
 
-.production-list button:hover {
-  background: var(--ink);
-  color: var(--paper);
+.production-list button.prod-row:hover {
+  background: #fffbe0;
+}
+
+.prod-name {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.prod-stats {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.prod-blurb {
+  font-size: 11px;
+  color: #555;
+}
+
+.production-list button.prod-row:hover .prod-blurb {
+  color: #333;
 }
 
 /* --- Stacked-units panel --- */

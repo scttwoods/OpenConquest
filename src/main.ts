@@ -177,7 +177,7 @@ function buildHelpTable(): void {
     army: 'Captures cities; rides Transports',
     fighter: `Fuel ${UNIT_SPECS.fighter.fuel} (range ~${Math.floor((UNIT_SPECS.fighter.fuel ?? 0) / 2)}); lands at cities/Carriers`,
     transport: 'Carries 6 Armies',
-    destroyer: 'Fast escort',
+    destroyer: 'Fast, sturdy escort; spots subs',
     submarine: 'Stealthy; hits ships for 2',
     cruiser: 'Tough warship',
     carrier: 'Hosts 8 Fighters at sea',
