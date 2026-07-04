@@ -19,10 +19,18 @@ export interface Unit {
   fuel: number;
   /** Unit id of the transport/carrier this unit is riding, or null. */
   aboard: number | null;
-  /** 'sentry' units skip the orders cycle until woken. */
-  mode: 'awake' | 'sentry' | 'moveto';
+  /**
+   * Standing order:
+   *  - 'awake'  wants orders / idle
+   *  - 'sentry' skips the orders cycle until an enemy comes adjacent
+   *  - 'moveto' walking toward `dest`, then goes awake
+   *  - 'patrol' cycling `patrol.route` forever until it spots an enemy
+   */
+  mode: 'awake' | 'sentry' | 'moveto' | 'patrol';
   /** Standing move-to order destination (mode === 'moveto'). */
   dest: { x: number; y: number } | null;
+  /** Patrol route + index of the waypoint currently being sought (mode === 'patrol'). */
+  patrol: { route: { x: number; y: number }[]; index: number } | null;
 }
 
 export interface Production {
@@ -126,6 +134,7 @@ export function spawnUnit(
     aboard: null,
     mode: 'awake',
     dest: null,
+    patrol: null,
   };
   state.units.set(unit.id, unit);
   return unit;

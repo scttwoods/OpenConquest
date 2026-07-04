@@ -31,8 +31,10 @@ export interface ViewUnit {
   movesLeft: number;
   fuel: number;
   aboard: number | null;
-  mode: 'awake' | 'sentry' | 'moveto';
+  mode: 'awake' | 'sentry' | 'moveto' | 'patrol';
   dest: { x: number; y: number } | null;
+  /** Patrol route (own units only), for drawing the loop. */
+  patrolRoute: { x: number; y: number }[] | null;
   cargoCount: number;
 }
 
@@ -120,6 +122,10 @@ export function viewFor(state: GameState, player: PlayerId): PlayerView {
       aboard: unit.aboard,
       mode: unit.mode,
       dest: unit.dest === null ? null : { ...unit.dest },
+      patrolRoute:
+        unit.owner === player && unit.patrol !== null
+          ? unit.patrol.route.map((p) => ({ ...p }))
+          : null,
       cargoCount: spec(unit.type).capacity === undefined ? 0 : cargoOf(state, unit.id).length,
     });
   }

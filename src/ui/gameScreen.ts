@@ -101,6 +101,8 @@ export function createGameScreen(
   let selectedId: number | null = null;
   let raf = 0;
   let centeredOnce = false;
+  /** When defining a patrol, the waypoints clicked so far; null when not. */
+  let patrolDraft: { x: number; y: number }[] | null = null;
 
   // Auto-advance: when it's your turn and nothing needs input (no awake units
   // with moves, every city building something), end the turn automatically so
@@ -148,7 +150,9 @@ export function createGameScreen(
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
     clampCamera(cam, view, w, h);
-    renderGame(ctx, view, cam, w, h, selectedId);
+    const selected = selectedUnit();
+    const draftAnchor = selected !== undefined ? { x: selected.x, y: selected.y } : null;
+    renderGame(ctx, view, cam, w, h, selectedId, patrolDraft, draftAnchor);
     if (measuring && measureAnchor !== null && measureTarget !== null) {
       drawMeasureLine(ctx, measureAnchor, measureTarget);
     }
@@ -173,9 +177,17 @@ export function createGameScreen(
     const turnLabel = myTurn() ? 'Your turn' : `${labelForPlayer(view.currentPlayer)}…`;
     const cityCount = view.cities.filter((c) => c.owner === view!.you).length;
     hudText.textContent = `Turn ${view.turn} · ${turnLabel} · ${cityCount} cities`;
-    btnEndTurn.disabled = !myTurn();
-    btnNextUnit.disabled = !myTurn();
+    btnEndTurn.disabled = !myTurn() || patrolDraft !== null;
+    btnNextUnit.disabled = !myTurn() || patrolDraft !== null;
     btnAuto.textContent = `Auto: ${autoAdvance ? 'On' : 'Off'}`;
+
+    if (patrolDraft !== null) {
+      unitPanel.classList.remove('hidden');
+      const n = patrolDraft.length;
+      unitPanelText.textContent =
+        `Setting patrol — click waypoints (${n} set), ` + `Enter to confirm, Esc to cancel.`;
+      return;
+    }
 
     const unit = selectedUnit();
     if (unit === undefined) {
@@ -194,6 +206,7 @@ export function createGameScreen(
       if (unit.aboard !== null) bits.push('aboard transport');
       if (unit.mode === 'sentry') bits.push('sleeping');
       if (unit.mode === 'moveto') bits.push('moving');
+      if (unit.mode === 'patrol') bits.push('patrolling');
       unitPanelText.textContent = bits.join(' · ');
       const hasMoves = unit.aboard === null && unit.movesLeft > 0;
       const hasPlan = unit.mode === 'moveto';
@@ -646,10 +659,44 @@ export function createGameScreen(
     return cap !== undefined && cap.type === sel.type && target.cargoCount < cap.count;
   }
 
+  // ---------- Patrol planning ----------
+  function beginPatrol(): void {
+    const unit = selectedUnit();
+    if (unit === undefined || !myTurn() || unit.aboard !== null) return;
+    patrolDraft = [];
+    toast('Click waypoints, then press Enter to set the patrol.');
+    requestRender();
+  }
+
+  function commitPatrol(): void {
+    const unit = selectedUnit();
+    if (patrolDraft !== null && unit !== undefined && patrolDraft.length > 0) {
+      session.send({ type: 'order', unitId: unit.id, order: { patrol: patrolDraft } });
+      selectedId = null;
+    }
+    patrolDraft = null;
+    requestRender();
+  }
+
+  function cancelPatrol(): void {
+    patrolDraft = null;
+    requestRender();
+  }
+
   function handleClick(e: PointerEvent, forceSelect = false): void {
     if (view === null) return;
     const tile = tileFromPointer(e);
     if (tile.x < 0 || tile.y < 0 || tile.x >= view.width || tile.y >= view.height) return;
+
+    // While planning a patrol, clicks add waypoints instead of moving.
+    if (patrolDraft !== null) {
+      const last = patrolDraft[patrolDraft.length - 1];
+      if (last === undefined || last.x !== tile.x || last.y !== tile.y) {
+        patrolDraft.push(tile);
+      }
+      requestRender();
+      return;
+    }
 
     // Your own units on the tapped tile, selectable in a stable order.
     const surfaceHere = view.units.filter(
@@ -906,26 +953,40 @@ export function createGameScreen(
       const unit = selectedUnit();
       switch (e.key) {
         case 'n':
-          selectNextUnit();
+          if (patrolDraft === null) selectNextUnit();
           break;
         case ' ':
           e.preventDefault();
+          if (patrolDraft !== null) break;
           if (unit !== undefined && myTurn()) {
             session.send({ type: 'order', unitId: unit.id, order: 'skip' });
             selectNextUnit();
           }
           break;
         case 's':
+          if (patrolDraft !== null) break;
           if (unit !== undefined && myTurn()) {
             session.send({ type: 'order', unitId: unit.id, order: 'sentry' });
             selectNextUnit();
           }
           break;
+        case 'p':
+          if (patrolDraft === null) beginPatrol();
+          else commitPatrol();
+          break;
         case 'Enter':
+          if (patrolDraft !== null) {
+            commitPatrol();
+            break;
+          }
           if (myTurn() && !productionDialog.classList.contains('hidden')) return;
           if (myTurn()) session.send({ type: 'endTurn' });
           break;
         case 'Escape':
+          if (patrolDraft !== null) {
+            cancelPatrol();
+            break;
+          }
           selectedId = null;
           productionDialog.classList.add('hidden');
           stackDialog.classList.add('hidden');

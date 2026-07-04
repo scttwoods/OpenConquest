@@ -25,7 +25,12 @@ export type Command =
   | {
       type: 'order';
       unitId: number;
-      order: 'sentry' | 'awake' | 'skip' | { moveTo: { x: number; y: number } };
+      order:
+        | 'sentry'
+        | 'awake'
+        | 'skip'
+        | { moveTo: { x: number; y: number } }
+        | { patrol: { x: number; y: number }[] };
     }
   // Load a unit onto a transport/carrier already sharing its tile (e.g. both
   // sitting in a coastal city, where there's no tile to "move onto").
@@ -294,6 +299,73 @@ function runMoveToOrder(state: GameState, unit: Unit): void {
   }
 }
 
+/** An enemy surface unit within this unit's own vision radius, if any. */
+function enemyWithinVision(state: GameState, unit: Unit): Unit | undefined {
+  const radius = spec(unit.type).vision;
+  for (const other of state.units.values()) {
+    if (
+      other.owner !== unit.owner &&
+      other.aboard === null &&
+      chebyshev(unit.x, unit.y, other.x, other.y) <= radius
+    ) {
+      return other;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Advance a patrolling unit along its route this turn. It never starts a
+ * fight and never ends the order on its own — it loops the waypoints until
+ * it spots an enemy (which wakes it) or the player cancels.
+ */
+function runPatrolOrder(state: GameState, unit: Unit): void {
+  const patrol = unit.patrol;
+  if (patrol === null || patrol.route.length < 2) {
+    unit.mode = 'awake';
+    unit.patrol = null;
+    return;
+  }
+  // Spotting an enemy at any point halts the patrol and hands back control.
+  if (enemyWithinVision(state, unit) !== undefined) {
+    unit.mode = 'awake';
+    return;
+  }
+
+  let guard = patrol.route.length + 1; // bound waypoint hops per turn
+  while (unit.mode === 'patrol' && unit.movesLeft > 0 && state.units.has(unit.id)) {
+    let target = patrol.route[patrol.index] as { x: number; y: number };
+    if (unit.x === target.x && unit.y === target.y) {
+      patrol.index = (patrol.index + 1) % patrol.route.length;
+      target = patrol.route[patrol.index] as { x: number; y: number };
+      if (--guard <= 0) return;
+    }
+    const step = nextStepToward(state, spec(unit.type).domain, unit.x, unit.y, target.x, target.y);
+    if (step === null) {
+      // This leg is unreachable (e.g. terrain changed hands); skip to the next.
+      patrol.index = (patrol.index + 1) % patrol.route.length;
+      if (--guard <= 0) return;
+      continue;
+    }
+    // Never walk into a fight while patrolling — wake and let the owner decide.
+    const enemies = unitsAt(state, step.x, step.y).filter((u) => u.owner !== unit.owner);
+    const cityId = cityIdAt(state, step.x, step.y);
+    const hostileCity = cityId >= 0 && state.cityOwners[cityId] !== unit.owner;
+    if (enemies.length > 0 || hostileCity) {
+      unit.mode = 'awake';
+      return;
+    }
+    const before = unit.movesLeft;
+    const result = moveStep(state, unit.owner, unit, step.x, step.y);
+    if (!result.ok || unit.movesLeft === before) return; // blocked; retry next turn
+    // Moving may have brought a hidden enemy into view.
+    if (enemyWithinVision(state, unit) !== undefined) {
+      unit.mode = 'awake';
+      return;
+    }
+  }
+}
+
 function startTurn(state: GameState, player: PlayerId): void {
   // Production.
   for (const city of state.world.cities) {
@@ -349,9 +421,9 @@ function startTurn(state: GameState, player: PlayerId): void {
  */
 function executeStandingOrders(state: GameState, player: PlayerId): void {
   for (const unit of [...state.units.values()]) {
-    if (unit.owner === player && unit.mode === 'moveto' && unit.aboard === null) {
-      runMoveToOrder(state, unit);
-    }
+    if (unit.owner !== player || unit.aboard !== null) continue;
+    if (unit.mode === 'moveto') runMoveToOrder(state, unit);
+    else if (unit.mode === 'patrol') runPatrolOrder(state, unit);
   }
   refreshAllFog(state);
 }
@@ -447,17 +519,34 @@ export function applyCommand(state: GameState, player: PlayerId, command: Comman
       if (command.order === 'sentry') {
         unit.mode = 'sentry';
         unit.dest = null;
+        unit.patrol = null;
       } else if (command.order === 'awake') {
         unit.mode = 'awake';
         unit.dest = null;
+        unit.patrol = null;
       } else if (command.order === 'skip') {
         unit.movesLeft = 0;
-      } else {
+      } else if ('moveTo' in command.order) {
         const dest = command.order.moveTo;
+        unit.patrol = null;
         if (dest.x === unit.x && dest.y === unit.y) return OK;
         unit.mode = 'moveto';
         unit.dest = { x: dest.x, y: dest.y };
         if (unit.aboard === null) runMoveToOrder(state, unit);
+      } else {
+        // Patrol: the unit's current tile anchors the loop, then the given
+        // waypoints; it cycles them forever until it spots an enemy.
+        const waypoints = command.order.patrol.filter(
+          (p) => p.x >= 0 && p.y >= 0 && p.x < state.world.width && p.y < state.world.height,
+        );
+        const route = [{ x: unit.x, y: unit.y }, ...waypoints].filter(
+          (p, i, arr) => i === 0 || p.x !== arr[i - 1]!.x || p.y !== arr[i - 1]!.y,
+        );
+        if (route.length < 2) return fail('A patrol needs at least one waypoint');
+        unit.dest = null;
+        unit.mode = 'patrol';
+        unit.patrol = { route, index: 1 };
+        if (unit.aboard === null) runPatrolOrder(state, unit);
       }
       refreshAllFog(state);
       return OK;

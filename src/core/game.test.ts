@@ -399,6 +399,89 @@ describe('fighters', () => {
   });
 });
 
+describe('patrol', () => {
+  it('cycles its route across turns until told otherwise', () => {
+    const state = makeTestState();
+    const fighter = spawnUnit(state, 'fighter', 0, 2, 10);
+    fighter.movesLeft = 4;
+
+    // Patrol between the current tile (2,10) and (6,10).
+    expect(
+      applyCommand(state, 0, {
+        type: 'order',
+        unitId: fighter.id,
+        order: { patrol: [{ x: 6, y: 10 }] },
+      }).ok,
+    ).toBe(true);
+    expect(fighter.mode).toBe('patrol');
+    expect(fighter.patrol?.route).toEqual([
+      { x: 2, y: 10 },
+      { x: 6, y: 10 },
+    ]);
+    // 4 moves this turn takes it straight to the far waypoint.
+    expect(fighter.x).toBe(6);
+
+    // Next turn it loops back toward the anchor.
+    const bounce = (): void => {
+      applyCommand(state, 0, { type: 'endTurn' });
+      applyCommand(state, 1, { type: 'endTurn' });
+    };
+    bounce();
+    expect(fighter.x).toBe(2);
+    expect(fighter.mode).toBe('patrol');
+    bounce();
+    expect(fighter.x).toBe(6);
+    expect(fighter.mode).toBe('patrol');
+  });
+
+  it('wakes and holds when an enemy enters its vision', () => {
+    const state = makeTestState();
+    const patroller = spawnUnit(state, 'destroyer', 0, 2, 30); // open sea
+    patroller.movesLeft = 3;
+    applyCommand(state, 0, {
+      type: 'order',
+      unitId: patroller.id,
+      order: { patrol: [{ x: 12, y: 30 }] },
+    });
+    expect(patroller.mode).toBe('patrol');
+
+    // Drop an enemy sub right next to the patrol lane, then start P0's next turn.
+    spawnUnit(state, 'submarine', 1, patroller.x + 1, patroller.y);
+    applyCommand(state, 0, { type: 'endTurn' });
+    applyCommand(state, 1, { type: 'endTurn' });
+
+    expect(patroller.mode).toBe('awake'); // spotted the enemy, stopped patrolling
+  });
+
+  it('rejects a patrol with no reachable waypoint distinct from the start', () => {
+    const state = makeTestState();
+    const army = spawnUnit(state, 'army', 0, 5, 5);
+    army.movesLeft = 1;
+    const result = applyCommand(state, 0, {
+      type: 'order',
+      unitId: army.id,
+      order: { patrol: [{ x: 5, y: 5 }] },
+    });
+    expect(result.ok).toBe(false);
+    expect(army.mode).toBe('awake');
+  });
+
+  it('survives a save/load round trip mid-patrol', () => {
+    const state = makeTestState();
+    const fighter = spawnUnit(state, 'fighter', 0, 2, 10);
+    fighter.movesLeft = 4;
+    applyCommand(state, 0, {
+      type: 'order',
+      unitId: fighter.id,
+      order: { patrol: [{ x: 6, y: 10 }] },
+    });
+    const restored = deserializeGame(JSON.parse(JSON.stringify(serializeGame(state))));
+    const rf = restored.units.get(fighter.id)!;
+    expect(rf.mode).toBe('patrol');
+    expect(rf.patrol).toEqual(fighter.patrol);
+  });
+});
+
 describe('fog-honest views', () => {
   it('hides enemy units outside vision and unseen terrain', () => {
     const state = makeTestState();

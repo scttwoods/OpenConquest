@@ -228,6 +228,46 @@ function drawUnit(
   }
 }
 
+/** Draw a dashed poly-line through a sequence of tile centers. */
+function drawRoute(
+  ctx: CanvasRenderingContext2D,
+  ts: number,
+  screenX: (x: number) => number,
+  screenY: (y: number) => number,
+  points: { x: number; y: number }[],
+  closed: boolean,
+): void {
+  if (points.length < 2) return;
+  const cx = (p: { x: number; y: number }): number => screenX(p.x) + ts / 2;
+  const cy = (p: { x: number; y: number }): number => screenY(p.y) + ts / 2;
+  const trace = (): void => {
+    ctx.beginPath();
+    ctx.moveTo(cx(points[0]!), cy(points[0]!));
+    for (let i = 1; i < points.length; i++) ctx.lineTo(cx(points[i]!), cy(points[i]!));
+    if (closed) ctx.lineTo(cx(points[0]!), cy(points[0]!));
+    ctx.stroke();
+  };
+  // White under-stroke then black dashes, so the route reads on any terrain.
+  ctx.setLineDash([]);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 3;
+  trace();
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  trace();
+  ctx.setLineDash([]);
+  // Waypoint pips.
+  for (const p of points) {
+    const px = cx(p);
+    const py = cy(p);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(px - 3, py - 3, 6, 6);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(px - 2, py - 2, 4, 4);
+  }
+}
+
 /** Render a player's fogged view of the world. */
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -236,6 +276,8 @@ export function renderGame(
   viewW: number,
   viewH: number,
   selectedUnitId: number | null,
+  patrolDraft: { x: number; y: number }[] | null = null,
+  draftAnchor: { x: number; y: number } | null = null,
 ): void {
   const ts = cam.tileSize;
   ctx.fillStyle = '#000';
@@ -386,6 +428,16 @@ export function renderGame(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${count}`, px + badge / 2, py + badge / 2 + 1);
+  }
+
+  // Patrol routes: the selected unit's active loop, or the one being planned.
+  const selected =
+    selectedUnitId === null ? undefined : view.units.find((u) => u.id === selectedUnitId);
+  if (selected !== undefined && selected.patrolRoute !== null && patrolDraft === null) {
+    drawRoute(ctx, ts, screenX, screenY, selected.patrolRoute, true);
+  }
+  if (patrolDraft !== null && draftAnchor !== null) {
+    drawRoute(ctx, ts, screenX, screenY, [draftAnchor, ...patrolDraft], patrolDraft.length >= 2);
   }
 
   // Off-map surround + edge frame: everything beyond the world bounds is filled
