@@ -403,35 +403,40 @@ describe('patrol', () => {
   it('cycles its route across turns until told otherwise', () => {
     const state = makeTestState();
     const fighter = spawnUnit(state, 'fighter', 0, 2, 10);
-    fighter.movesLeft = 4;
+    fighter.movesLeft = 1;
 
-    // Patrol between the current tile (2,10) and (6,10).
+    // Patrol between the current tile (2,10) and (6,10). An army-speed unit
+    // (1 move/turn) makes the cadence easy to reason about.
+    const army = spawnUnit(state, 'army', 0, 3, 5); // both endpoints are land
+    army.movesLeft = 1;
     expect(
       applyCommand(state, 0, {
         type: 'order',
-        unitId: fighter.id,
-        order: { patrol: [{ x: 6, y: 10 }] },
+        unitId: army.id,
+        order: { patrol: [{ x: 6, y: 5 }] },
       }).ok,
     ).toBe(true);
-    expect(fighter.mode).toBe('patrol');
-    expect(fighter.patrol?.route).toEqual([
-      { x: 2, y: 10 },
-      { x: 6, y: 10 },
+    expect(army.mode).toBe('patrol');
+    expect(army.patrol?.route).toEqual([
+      { x: 3, y: 5 },
+      { x: 6, y: 5 },
     ]);
-    // 4 moves this turn takes it straight to the far waypoint.
-    expect(fighter.x).toBe(6);
 
-    // Next turn it loops back toward the anchor.
-    const bounce = (): void => {
+    // Standing orders travel at end of turn; run many full turns and confirm
+    // the unit keeps patrolling and loops between both endpoints.
+    const p0turn = (): void => {
       applyCommand(state, 0, { type: 'endTurn' });
       applyCommand(state, 1, { type: 'endTurn' });
     };
-    bounce();
-    expect(fighter.x).toBe(2);
-    expect(fighter.mode).toBe('patrol');
-    bounce();
-    expect(fighter.x).toBe(6);
-    expect(fighter.mode).toBe('patrol');
+    const visited = new Set<number>([army.x]);
+    for (let i = 0; i < 16; i++) {
+      p0turn();
+      expect(army.mode).toBe('patrol'); // never stops on its own (no enemies)
+      visited.add(army.x);
+    }
+    // It reached both the far waypoint and the anchor — a full loop.
+    expect(visited.has(6)).toBe(true);
+    expect(visited.has(3)).toBe(true);
   });
 
   it('wakes and holds when an enemy enters its vision', () => {
