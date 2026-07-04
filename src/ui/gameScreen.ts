@@ -70,6 +70,7 @@ export function createGameScreen(
 ): GameScreen {
   const canvas = el<HTMLCanvasElement>('game-canvas');
   const minimapCanvas = el<HTMLCanvasElement>('minimap');
+  const hud = el<HTMLDivElement>('hud');
   const hudText = el<HTMLSpanElement>('hud-text');
   const btnEndTurn = el<HTMLButtonElement>('btn-end-turn');
   const btnNextUnit = el<HTMLButtonElement>('btn-next-unit');
@@ -123,9 +124,19 @@ export function createGameScreen(
   let measureTarget: { x: number; y: number } | null = null;
   let holdTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // The map is inset below the top menu bar so nothing renders under it. The
+  // reserved strip is the HUD's occupied height plus a small margin; 0 when the
+  // HUD is hidden. All camera math and pointer→tile mapping use this inset.
+  const FRAME_GREY = '#4c525a'; // matches the renderer's off-map surround
+  function topInset(): number {
+    if (hud.classList.contains('hidden')) return 0;
+    return Math.round(hud.getBoundingClientRect().bottom + 8);
+  }
+
+  // Effective viewport: the drawable map area below the top menu bar.
   const viewSize = (): { w: number; h: number } => ({
     w: canvas.clientWidth,
-    h: canvas.clientHeight,
+    h: Math.max(1, canvas.clientHeight - topInset()),
   });
 
   function selectedUnit(): ViewUnit | undefined {
@@ -140,22 +151,42 @@ export function createGameScreen(
   function draw(): void {
     if (view === null) return;
     const dpr = window.devicePixelRatio || 1;
-    const { w, h } = viewSize();
-    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
+    // The canvas backing store covers the whole window…
+    const fullW = canvas.clientWidth;
+    const fullH = canvas.clientHeight;
+    if (canvas.width !== Math.floor(fullW * dpr) || canvas.height !== Math.floor(fullH * dpr)) {
+      canvas.width = Math.floor(fullW * dpr);
+      canvas.height = Math.floor(fullH * dpr);
     }
     const ctx = canvas.getContext('2d');
     if (ctx === null) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
+
+    // …but the map is drawn into the inset area below the top menu bar.
+    const top = topInset();
+    const { w, h } = viewSize();
     clampCamera(cam, view, w, h);
     const selected = selectedUnit();
     const draftAnchor = selected !== undefined ? { x: selected.x, y: selected.y } : null;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, top, w, h);
+    ctx.clip();
+    ctx.translate(0, top);
     renderGame(ctx, view, cam, w, h, selectedId, patrolDraft, draftAnchor);
     if (measuring && measureAnchor !== null && measureTarget !== null) {
       drawMeasureLine(ctx, measureAnchor, measureTarget);
     }
+    ctx.restore();
+
+    // Clear the reserved strip so no map ever shows under the menu bar.
+    if (top > 0) {
+      ctx.fillStyle = FRAME_GREY;
+      ctx.fillRect(0, 0, fullW, top);
+    }
+
     const mctx = minimapCanvas.getContext('2d');
     if (mctx !== null) {
       renderMinimap(mctx, view, cam, w, h, minimapCanvas.width, minimapCanvas.height);
@@ -553,7 +584,7 @@ export function createGameScreen(
     const rect = canvas.getBoundingClientRect();
     return {
       x: Math.floor((cam.x + (e.clientX - rect.left)) / cam.tileSize),
-      y: Math.floor((cam.y + (e.clientY - rect.top)) / cam.tileSize),
+      y: Math.floor((cam.y + (e.clientY - rect.top - topInset())) / cam.tileSize),
     };
   }
 
@@ -839,7 +870,7 @@ export function createGameScreen(
           if (ratio > 1.25 || ratio < 0.8) {
             const rect = canvas.getBoundingClientRect();
             const { w, h } = viewSize();
-            zoomAt(cam, view, w, h, ratio > 1 ? 1 : -1, midX - rect.left, midY - rect.top);
+            zoomAt(cam, view, w, h, ratio > 1 ? 1 : -1, midX - rect.left, midY - rect.top - topInset());
             pinchDistance = distance;
             requestRender();
           }
@@ -925,7 +956,7 @@ export function createGameScreen(
       if (view === null) return;
       const rect = canvas.getBoundingClientRect();
       const { w, h } = viewSize();
-      zoomAt(cam, view, w, h, e.deltaY < 0 ? 1 : -1, e.clientX - rect.left, e.clientY - rect.top);
+      zoomAt(cam, view, w, h, e.deltaY < 0 ? 1 : -1, e.clientX - rect.left, e.clientY - rect.top - topInset());
       requestRender();
     },
     { signal, passive: false },
