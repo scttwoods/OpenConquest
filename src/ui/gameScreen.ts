@@ -601,9 +601,19 @@ export function createGameScreen(
       text += ` · ~${turns} ${turns === 1 ? 'turn' : 'turns'}`;
     }
     measureReadout.textContent = text;
-    measureReadout.style.left = `${clientX + 14}px`;
-    measureReadout.style.top = `${clientY + 14}px`;
     measureReadout.classList.remove('hidden');
+    // Float the readout well above the finger/cursor so it isn't hidden under
+    // the hand, and clamp it inside the viewport. Measure after it's visible.
+    const pad = 8;
+    const w = measureReadout.offsetWidth;
+    const h = measureReadout.offsetHeight;
+    let left = clientX - w / 2; // centered horizontally on the touch point
+    let top = clientY - h - 40; // ~40px above it, clear of a fingertip
+    left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
+    if (top < pad) top = clientY + 44; // no room above → drop just below instead
+    top = Math.min(top, window.innerHeight - h - pad);
+    measureReadout.style.left = `${left}px`;
+    measureReadout.style.top = `${top}px`;
   }
 
   function startMeasuring(clientX: number, clientY: number): void {
