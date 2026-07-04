@@ -192,6 +192,7 @@
         <button id="btn-next-unit" type="button">Next Unit</button>
         <button id="btn-end-turn" type="button">End Turn</button>
         <button id="btn-auto" type="button">Auto: On</button>
+        <button id="btn-map" type="button">Map</button>
         <button id="btn-mute" type="button">Sound</button>
         <button id="btn-menu" type="button">Menu</button>
       </div>
@@ -211,7 +212,12 @@
       <div id="measure-readout" class="hidden"></div>
 
       <div id="minimap-window" class="mac-window hidden">
-        <div class="title-bar"><span class="title-bar-text">Map</span></div>
+        <div class="title-bar">
+          <button id="btn-minimap-close" type="button" class="close-box" aria-label="Hide map">
+            ×
+          </button>
+          <span class="title-bar-text">Map</span>
+        </div>
         <canvas id="minimap" width="220" height="140"></canvas>
       </div>
 

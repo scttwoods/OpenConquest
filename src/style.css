@@ -72,11 +72,37 @@ textarea {
 }
 
 .title-bar {
+  position: relative;
   border-bottom: 2px solid var(--ink);
   padding: 4px 8px;
   text-align: center;
   /* Classic horizontal-lines title bar */
   background: repeating-linear-gradient(to bottom, var(--paper) 0 2px, var(--ink) 2px 3px);
+}
+
+/* Classic Mac close box on the left of a title bar. */
+.close-box {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  line-height: 14px;
+  padding: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: bold;
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.close-box:hover {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .title-bar-text {

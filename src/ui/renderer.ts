@@ -387,6 +387,23 @@ export function renderGame(
     ctx.textBaseline = 'middle';
     ctx.fillText(`${count}`, px + badge / 2, py + badge / 2 + 1);
   }
+
+  // Off-map surround + edge frame: everything beyond the world bounds is filled
+  // a flat grey (distinct from black fog), with a grey border ON the boundary,
+  // so you can always tell where the map ends — even zoomed in with the edge
+  // near the top or bottom of the screen.
+  const worldLeft = -cam.x;
+  const worldTop = -cam.y;
+  const worldRight = view.width * ts - cam.x;
+  const worldBottom = view.height * ts - cam.y;
+  ctx.fillStyle = '#4c525a';
+  if (worldTop > 0) ctx.fillRect(0, 0, viewW, worldTop); // above the map
+  if (worldBottom < viewH) ctx.fillRect(0, worldBottom, viewW, viewH - worldBottom); // below
+  if (worldLeft > 0) ctx.fillRect(0, 0, worldLeft, viewH); // left
+  if (worldRight < viewW) ctx.fillRect(worldRight, 0, viewW - worldRight, viewH); // right
+  ctx.strokeStyle = '#9aa1ab';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(worldLeft, worldTop, view.width * ts, view.height * ts);
 }
 
 /** Small roof-shaped city marker in a tile's top-right corner. */

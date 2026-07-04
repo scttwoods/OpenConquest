@@ -244,6 +244,14 @@ btnMute.addEventListener('click', () => {
   updateMuteLabel();
 });
 
+// Map window show/hide.
+document.getElementById('btn-map')?.addEventListener('click', () => {
+  minimapWindow.classList.toggle('hidden');
+});
+document.getElementById('btn-minimap-close')?.addEventListener('click', () => {
+  minimapWindow.classList.add('hidden');
+});
+
 window.addEventListener('resize', () => {
   if (screen === null) drawBackground();
 });
