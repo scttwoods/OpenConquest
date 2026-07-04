@@ -59,6 +59,42 @@ export function aiTakeTurn(state: GameState): void {
       (u) => u.owner === me && (type === undefined || u.type === type),
     );
 
+  // Continents I hold at least one city on (reachable by land from home).
+  const myLabels = new Set<number>();
+  for (const city of world.cities) {
+    if (state.cityOwners[city.id] === me) myLabels.add(labelAt(city.x, city.y));
+  }
+  const homeTargets = knownTargets.filter((t) => myLabels.has(labelAt(t.x, t.y)));
+  const overseasTargets = knownTargets.filter((t) => !myLabels.has(labelAt(t.x, t.y)));
+  const enemy = (1 - me) as 0 | 1;
+  // Prefer striking the enemy's own cities over grabbing neutral islands, so the
+  // AI actually closes out a win instead of sprawling across empty land.
+  const targetRank = (t: { id: number }): number =>
+    (fog.cityOwner[t.id] as number) === enemy ? 0 : 1;
+
+  const myCoastalCities = world.cities.filter(
+    (c) => state.cityOwners[c.id] === me && isCoastalCity(world, c.id),
+  );
+
+  /** Nearest sea tile to a point (an amphibious drop-off near a target coast). */
+  const nearestSeaTo = (cx: number, cy: number): { x: number; y: number } | null =>
+    findNearest(world.width, world.height, cx, cy, () => true, seaAt, 8);
+
+  // A single shared staging port so armies and transports rendezvous at the
+  // SAME place. Prefer the coastal city closest to where the fight is.
+  let stagingPort: { x: number; y: number; id: number } | null = null;
+  if (myCoastalCities.length > 0) {
+    const ref = overseasTargets[0] ?? knownTargets[0] ?? null;
+    const sorted = [...myCoastalCities].sort((a, b) =>
+      ref !== null
+        ? chebyshev(a.x, a.y, ref.x, ref.y) - chebyshev(b.x, b.y, ref.x, ref.y)
+        : a.id - b.id,
+    );
+    stagingPort = sorted[0] ?? null;
+  }
+
+  const transportCap = spec('transport').capacity?.count ?? 6;
+
   // ---------- Production ----------
   for (const city of world.cities) {
     if (state.cityOwners[city.id] !== me) continue;
@@ -71,18 +107,27 @@ export function aiTakeTurn(state: GameState): void {
     const warships = myUnits().filter((u) =>
       ['destroyer', 'submarine', 'cruiser', 'battleship'].includes(u.type),
     ).length;
+    const label = labelAt(city.x, city.y);
+    // Only the home continent still being contested keeps pumping armies.
+    const stillFighting = homeTargets.some((t) => labelAt(t.x, t.y) === label);
 
-    let choice: (typeof UNIT_SPECS)['army'] extends never ? never : keyof typeof UNIT_SPECS;
+    let choice: keyof typeof UNIT_SPECS;
     if (!coastal) {
-      choice = fighters < armies / 6 ? 'fighter' : 'army';
-    } else if (continentNeedsArmies(labelAt(city.x, city.y))) {
+      // Inland: mostly armies (they march to the staging port), a few scouts.
+      choice = fighters < armies / 8 && armies > 4 ? 'fighter' : 'army';
+    } else if (stillFighting || armies < 6) {
+      // Take the home continent first, and keep a minimum invasion force.
       choice = 'army';
-    } else if (transports < 1 + Math.floor(armies / 5)) {
+    } else if (transports < Math.min(4, Math.max(2, Math.ceil(armies / transportCap)))) {
+      // Build enough sealift to actually move the army overseas (but not a fleet
+      // of empty boats).
       choice = 'transport';
     } else if (warships < transports) {
       choice = state.rng.chance(0.5) ? 'destroyer' : 'submarine';
+    } else if (armies < 16) {
+      choice = 'army';
     } else {
-      choice = state.rng.chance(0.4) ? 'army' : state.rng.chance(0.5) ? 'fighter' : 'transport';
+      choice = state.rng.chance(0.5) ? 'army' : state.rng.chance(0.5) ? 'fighter' : 'destroyer';
     }
     applyCommand(state, me, { type: 'setProduction', cityId: city.id, unit: choice });
   }
@@ -116,8 +161,8 @@ export function aiTakeTurn(state: GameState): void {
 
     if (unit.type === 'army') {
       const myLabel = labelAt(unit.x, unit.y);
-      // 1. Nearest known target city on my continent.
-      const target = knownTargets
+      // 1. Assault the nearest known target city on my own continent.
+      const target = homeTargets
         .filter((c) => labelAt(c.x, c.y) === myLabel)
         .sort(
           (a, b) => chebyshev(unit.x, unit.y, a.x, a.y) - chebyshev(unit.x, unit.y, b.x, b.y),
@@ -139,7 +184,8 @@ export function aiTakeTurn(state: GameState): void {
         }
         continue;
       }
-      // 2. Explore my continent's unseen land.
+      // 2. Scout NEARBY unseen land on my continent (bounded, so armies don't
+      //    wander the whole map forever instead of joining the invasion).
       const unseen = findNearest(
         world.width,
         world.height,
@@ -147,86 +193,95 @@ export function aiTakeTurn(state: GameState): void {
         unit.y,
         (x, y) => landAt(x, y),
         (x, y) => landAt(x, y) && fogAt(x, y) === FOG_UNSEEN && labelAt(x, y) === myLabel,
+        18,
       );
       if (unseen !== null) {
         applyCommand(state, me, { type: 'order', unitId: unit.id, order: { moveTo: unseen } });
         continue;
       }
-      // 3. Continent conquered: board any adjacent transport with room.
-      let boarded = false;
-      for (const t of myUnits('transport')) {
-        if (
-          chebyshev(unit.x, unit.y, t.x, t.y) === 1 &&
-          cargoOf(state, t.id).length < (spec('transport').capacity?.count ?? 6)
-        ) {
-          boarded = applyCommand(state, me, {
-            type: 'move',
-            unitId: unit.id,
-            to: { x: t.x, y: t.y },
-          }).ok;
-          if (boarded) break;
-        }
-      }
-      if (!boarded) {
-        // Walk toward the nearest of my coastal cities to await pickup.
-        const port = world.cities.find(
-          (c) =>
-            state.cityOwners[c.id] === me &&
-            isCoastalCity(world, c.id) &&
-            labelAt(c.x, c.y) === myLabel,
-        );
-        if (port !== undefined && !(unit.x === port.x && unit.y === port.y)) {
+      // 3. Nothing to do on land — muster at the staging port and embark.
+      if (stagingPort !== null) {
+        const atPort = unit.x === stagingPort.x && unit.y === stagingPort.y;
+        if (atPort) {
+          // Board a transport docked here that still has room.
+          const ride = myUnits('transport').find(
+            (t) =>
+              t.x === stagingPort!.x &&
+              t.y === stagingPort!.y &&
+              cargoOf(state, t.id).length < transportCap,
+          );
+          if (ride !== undefined) {
+            applyCommand(state, me, { type: 'board', unitId: unit.id, carrierId: ride.id });
+          } else {
+            applyCommand(state, me, { type: 'order', unitId: unit.id, order: 'skip' });
+          }
+        } else {
           applyCommand(state, me, {
             type: 'order',
             unitId: unit.id,
-            order: { moveTo: { x: port.x, y: port.y } },
+            order: { moveTo: { x: stagingPort.x, y: stagingPort.y } },
           });
-        } else {
-          applyCommand(state, me, { type: 'order', unitId: unit.id, order: 'skip' });
         }
+      } else {
+        applyCommand(state, me, { type: 'order', unitId: unit.id, order: 'skip' });
       }
       continue;
     }
 
     if (unit.type === 'transport') {
       const cargo = cargoOf(state, unit.id).length;
-      if (cargo >= 4 || (cargo >= 2 && state.turn > 40)) {
-        // Sail toward the nearest known target city across the water.
-        const target = knownTargets.sort(
-          (a, b) => chebyshev(unit.x, unit.y, a.x, a.y) - chebyshev(unit.x, unit.y, b.x, b.y),
-        )[0];
-        if (target !== undefined) {
-          applyCommand(state, me, {
-            type: 'order',
-            unitId: unit.id,
-            order: { moveTo: { x: target.x, y: target.y } },
-          });
-          continue;
-        }
-        // Nothing known: probe the nearest unseen sea.
-        const unseenSea = findNearest(
-          world.width,
-          world.height,
-          unit.x,
-          unit.y,
-          (x, y) => seaAt(x, y),
-          (x, y) => seaAt(x, y) && fogAt(x, y) === FOG_UNSEEN,
+      // Armies still waiting to embark at the staging port?
+      const troopsWaiting =
+        stagingPort !== null &&
+        myUnits('army').some(
+          (a) => a.aboard === null && a.x === stagingPort!.x && a.y === stagingPort!.y,
         );
-        if (unseenSea !== null) {
-          applyCommand(state, me, { type: 'order', unitId: unit.id, order: { moveTo: unseenSea } });
+      // Sail once we have a worthwhile load, or after a while with anyone aboard,
+      // or when full — but don't sit empty forever if troops can't reach us.
+      const readyToSail =
+        cargo >= transportCap ||
+        (cargo >= 3 && overseasTargets.length > 0) ||
+        (cargo >= 1 && !troopsWaiting) ||
+        (cargo >= 1 && state.turn > 60);
+
+      if (readyToSail) {
+        // Aim for a sea tile beside the best known target — enemy cities first,
+        // then by distance — so the embarked armies storm the beach on arrival.
+        const target = [...knownTargets].sort(
+          (a, b) =>
+            targetRank(a) - targetRank(b) ||
+            chebyshev(unit.x, unit.y, a.x, a.y) - chebyshev(unit.x, unit.y, b.x, b.y),
+        )[0];
+        const drop = target !== undefined ? nearestSeaTo(target.x, target.y) : null;
+        const dest =
+          drop ??
+          findNearest(
+            world.width,
+            world.height,
+            unit.x,
+            unit.y,
+            (x, y) => seaAt(x, y),
+            (x, y) => seaAt(x, y) && fogAt(x, y) === FOG_UNSEEN,
+          );
+        if (dest !== null) {
+          applyCommand(state, me, { type: 'order', unitId: unit.id, order: { moveTo: dest } });
+        } else {
+          applyCommand(state, me, { type: 'order', unitId: unit.id, order: 'skip' });
         }
         continue;
       }
-      // Waiting for troops: dock at my nearest coastal city.
-      const port = world.cities.find(
-        (c) => state.cityOwners[c.id] === me && isCoastalCity(world, c.id),
-      );
-      if (port !== undefined && !(unit.x === port.x && unit.y === port.y)) {
-        applyCommand(state, me, {
-          type: 'order',
-          unitId: unit.id,
-          order: { moveTo: { x: port.x, y: port.y } },
-        });
+
+      // Loading: sit at the staging port so mustering armies can board.
+      if (stagingPort !== null) {
+        if (unit.x === stagingPort.x && unit.y === stagingPort.y) {
+          applyCommand(state, me, { type: 'order', unitId: unit.id, order: 'skip' });
+        } else {
+          applyCommand(state, me, {
+            type: 'order',
+            unitId: unit.id,
+            order: { moveTo: { x: stagingPort.x, y: stagingPort.y } },
+          });
+        }
       } else {
         applyCommand(state, me, { type: 'order', unitId: unit.id, order: 'skip' });
       }
