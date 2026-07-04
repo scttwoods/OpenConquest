@@ -211,6 +211,8 @@ function moveStep(
   }
 
   // --- Boarding friendly transports / carriers ---
+  // Boarding takes priority over stacking: moving an Army onto a friendly
+  // Transport (or a Fighter onto a Carrier) with room loads it as cargo.
   if (friends.length > 0) {
     const carrier = friends.find((f) => {
       const cap = spec(f.type).capacity;
@@ -225,7 +227,8 @@ function moveStep(
       refreshAllFog(state);
       return OK;
     }
-    if (cityId < 0) return fail('Tile is occupied');
+    // Otherwise friendly units freely share a tile — fall through to plain
+    // movement, which still enforces terrain (no armies at sea, etc.).
   }
 
   // --- Plain movement (including into own cities) ---

@@ -144,6 +144,34 @@ describe('movement & turn rules', () => {
     expect(army.mode).toBe('awake');
     expect(army.dest).toBe(null);
   });
+
+  it('friendly units may stack on the same open tile', () => {
+    const state = makeTestState();
+    const a = spawnUnit(state, 'army', 0, 4, 4);
+    spawnUnit(state, 'army', 0, 5, 4); // friendly army already there
+    a.movesLeft = 1;
+    expect(applyCommand(state, 0, { type: 'move', unitId: a.id, to: { x: 5, y: 4 } }).ok).toBe(
+      true,
+    );
+    expect(a.x).toBe(5);
+    // Both armies now occupy (5,4).
+    expect(state.units.get(a.id)?.x).toBe(5);
+    const here = [...state.units.values()].filter(
+      (u) => u.owner === 0 && u.aboard === null && u.x === 5 && u.y === 4,
+    );
+    expect(here.length).toBe(2);
+  });
+
+  it('boarding a transport still beats stacking', () => {
+    const state = makeTestState();
+    const transport = spawnUnit(state, 'transport', 0, 4, SEA_Y);
+    const army = spawnUnit(state, 'army', 0, 4, LAND_Y);
+    army.movesLeft = 1;
+    expect(
+      applyCommand(state, 0, { type: 'move', unitId: army.id, to: { x: 4, y: SEA_Y } }).ok,
+    ).toBe(true);
+    expect(army.aboard).toBe(transport.id); // boarded, not stacked on the sea tile
+  });
 });
 
 describe('combat', () => {

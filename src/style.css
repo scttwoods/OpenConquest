@@ -468,6 +468,19 @@ fieldset.field legend {
   font-size: 12px;
 }
 
+/* --- Measure ruler readout --- */
+
+#measure-readout {
+  position: fixed;
+  z-index: 30;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 3px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* --- Chat --- */
 
 #chat-window {
