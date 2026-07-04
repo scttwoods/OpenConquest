@@ -77,30 +77,96 @@ export function findContinents(
   return { labels, continents };
 }
 
-/** Grow islands by random walks until the target land fraction is reached. */
+/**
+ * Count land tiles in the 8-neighborhood of (x,y). Out-of-bounds counts as sea.
+ */
+function landNeighbors8(terrain: Uint8Array, width: number, height: number, x: number, y: number): number {
+  let n = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (inBounds(nx, ny, width, height) && terrain[tileIndex(nx, ny, width)] === TERRAIN_LAND) {
+        n++;
+      }
+    }
+  }
+  return n;
+}
+
+/**
+ * One cellular-automaton smoothing pass (the standard "cave" rule): a tile
+ * becomes land if a majority of its neighborhood is land. This rounds off
+ * coastlines and, crucially, erodes single-tile nubs and diagonal pinch points
+ * while filling one-tile gaps — so no filaments or 1-wide arms survive.
+ * Border tiles are forced to sea to keep islands off the map edge.
+ */
+function smooth(terrain: Uint8Array, width: number, height: number, margin: number): Uint8Array {
+  const next = new Uint8Array(terrain.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (x < margin || y < margin || x >= width - margin || y >= height - margin) {
+        continue; // border stays sea
+      }
+      const i = tileIndex(x, y, width);
+      const n = landNeighbors8(terrain, width, height, x, y);
+      const isLand = terrain[i] === TERRAIN_LAND;
+      // Land needs >=4 land neighbors to stay (a 1-wide arm has <=3, so it
+      // erodes); sea flips to land only when clearly enclosed (>=5).
+      next[i] = (isLand ? n >= 4 : n >= 5) ? TERRAIN_LAND : TERRAIN_SEA;
+    }
+  }
+  return next;
+}
+
+/**
+ * Grow chunky islands: random walks painted with a 3x3 brush (so land is never
+ * thinner than three tiles), then cellular-automaton smoothing to round the
+ * coastlines and remove any residual thin arms.
+ */
 function generateTerrain(rng: Rng, width: number, height: number): Uint8Array {
-  const terrain = new Uint8Array(width * height).fill(TERRAIN_SEA);
+  let terrain: Uint8Array = new Uint8Array(width * height).fill(TERRAIN_SEA);
   const target = Math.floor(width * height * LAND_FRACTION);
   // Keep walks away from the map border so the world reads as an ocean map.
   const marginX = Math.max(2, Math.floor(width * 0.06));
   const marginY = Math.max(2, Math.floor(height * 0.06));
+  const margin = Math.min(marginX, marginY);
   let land = 0;
 
-  while (land < target) {
+  const paintBrush = (cx: number, cy: number): void => {
+    // 3x3 stamp — guarantees a minimum land width of three tiles.
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x < marginX || y < marginY || x >= width - marginX || y >= height - marginY) continue;
+        const i = tileIndex(x, y, width);
+        if (terrain[i] === TERRAIN_SEA) {
+          terrain[i] = TERRAIN_LAND;
+          land++;
+        }
+      }
+    }
+  };
+
+  // Aim a bit below target; smoothing nudges the final land area back up.
+  const walkTarget = Math.floor(target * 0.85);
+  while (land < walkTarget) {
     let x = marginX + rng.int(width - 2 * marginX);
     let y = marginY + rng.int(height - 2 * marginY);
-    const walkLength = 40 + rng.int(90);
-    for (let step = 0; step < walkLength && land < target; step++) {
-      const i = tileIndex(x, y, width);
-      if (terrain[i] === TERRAIN_SEA) {
-        terrain[i] = TERRAIN_LAND;
-        land++;
-      }
+    const walkLength = 25 + rng.int(55);
+    for (let step = 0; step < walkLength && land < walkTarget; step++) {
+      paintBrush(x, y);
       const dir = DIRS4[rng.int(4)] as readonly [number, number];
       x = Math.min(width - 1 - marginX, Math.max(marginX, x + dir[0]));
       y = Math.min(height - 1 - marginY, Math.max(marginY, y + dir[1]));
     }
   }
+
+  // Two smoothing passes clean up coastlines and kill any thin arms.
+  terrain = smooth(terrain, width, height, margin);
+  terrain = smooth(terrain, width, height, margin);
   return terrain;
 }
 

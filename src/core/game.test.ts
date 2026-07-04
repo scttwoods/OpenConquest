@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, countCities } from './game';
-import { createGame, spawnUnit, unitAt, cargoOf, NEUTRAL, type GameState } from './state';
+import {
+  createGame,
+  refreshAllFog,
+  spawnUnit,
+  unitAt,
+  cargoOf,
+  NEUTRAL,
+  type GameState,
+} from './state';
 import { TERRAIN_LAND, TERRAIN_SEA } from './mapgen';
 import { tileIndex } from './grid';
 import { UNIT_SPECS } from './rules';
@@ -34,6 +42,9 @@ function makeTestState(): GameState {
   b.y = 2;
   world.cityAt[tileIndex(a.x, a.y, world.width)] = a.id;
   world.cityAt[tileIndex(b.x, b.y, world.width)] = b.id;
+  // Recompute fog for the reshaped world so tests don't depend on the fog that
+  // createGame happened to compute for the original (pre-bulldoze) map.
+  refreshAllFog(state);
   return state;
 }
 
@@ -408,6 +419,9 @@ describe('fog-honest views', () => {
     const cityId = state.world.starts[1];
     state.cityOwners[cityId] = NEUTRAL;
     const city = state.world.cities[cityId]!;
+    // Keep player 1 "alive" (a lone army) so neutralizing their city doesn't
+    // hand player 0 an instant victory before the assault even resolves.
+    spawnUnit(state, 'army', 1, 5, 5);
     // Assault until captured (each attempt spawns a fresh adjacent army).
     for (let i = 0; i < 80 && state.cityOwners[cityId] !== 0; i++) {
       const army = spawnUnit(state, 'army', 0, city.x - 1, city.y);
