@@ -1,7 +1,7 @@
 import { createRng, seedFromString } from './core/rng';
 import { createGame } from './core/state';
 import { deserializeGame, type SaveData } from './core/save';
-import { UNIT_SPECS, UNIT_TYPES, type MapSizeKey } from './core/rules';
+import { DIFFICULTIES, UNIT_SPECS, UNIT_TYPES, type DifficultyKey, type MapSizeKey } from './core/rules';
 import { createLocalSession, AUTOSAVE_KEY } from './session/local';
 import { createRemoteSession, savedPvpGame } from './session/remote';
 import type { Session } from './session/session';
@@ -89,8 +89,11 @@ function startNewLocalGame(): void {
   const seedString = seedInput.value.trim() || randomSeedString();
   const sizeInput = document.querySelector<HTMLInputElement>('input[name="map-size"]:checked');
   const sizeKey = (sizeInput?.value ?? 'medium') as MapSizeKey;
-  const state = createGame(seedFromString(seedString), sizeKey);
-  enterGame(createLocalSession(state), 'Computer', false);
+  const diffInput = document.querySelector<HTMLInputElement>('input[name="difficulty"]:checked');
+  const diffKey = (diffInput?.value ?? 'normal') as DifficultyKey;
+  // The player (0) always builds at normal speed; the computer (1) is handicapped.
+  const state = createGame(seedFromString(seedString), sizeKey, [1, DIFFICULTIES[diffKey].aiRate]);
+  enterGame(createLocalSession(state), `Computer (${DIFFICULTIES[diffKey].label})`, false);
 }
 
 function continueLocalGame(): void {

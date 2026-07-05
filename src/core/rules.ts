@@ -11,6 +11,19 @@ export const MAP_SIZES = {
 
 export type MapSizeKey = keyof typeof MAP_SIZES;
 
+/**
+ * Difficulty for vs-Computer games. The lever is the AI's production speed —
+ * an honest handicap, not fog cheating: on Hard the computer builds units
+ * faster, on Easy slower. `aiRate` is its production multiplier.
+ */
+export const DIFFICULTIES = {
+  easy: { label: 'Easy', aiRate: 0.6 },
+  normal: { label: 'Normal', aiRate: 1.0 },
+  hard: { label: 'Hard', aiRate: 1.6 },
+} as const;
+
+export type DifficultyKey = keyof typeof DIFFICULTIES;
+
 /** Fraction of the map that should be land. */
 export const LAND_FRACTION = 0.3;
 

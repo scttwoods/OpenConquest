@@ -372,7 +372,9 @@ function startTurn(state: GameState, player: PlayerId): void {
     if (state.cityOwners[city.id] !== player) continue;
     const production = state.production[city.id];
     if (production === null || production === undefined) continue;
-    production.progress++;
+    // Difficulty handicap: the production rate scales how fast progress
+    // accrues (1 = normal). Progress can be fractional as a result.
+    production.progress += state.productionRate[player];
     if (production.progress >= spec(production.type).buildTime) {
       spawnUnit(state, production.type, player, city.x, city.y);
       production.progress = 0;

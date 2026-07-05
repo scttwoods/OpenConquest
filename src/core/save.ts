@@ -23,6 +23,8 @@ export interface SaveData {
   production: ({ type: UnitType; progress: number } | null)[];
   units: Unit[];
   fogs: { state: number[]; cityOwner: number[] }[];
+  /** Optional for backward compatibility with pre-difficulty saves. */
+  productionRate?: [number, number];
 }
 
 export function serializeGame(state: GameState): SaveData {
@@ -47,6 +49,7 @@ export function serializeGame(state: GameState): SaveData {
       state: Array.from(f.state),
       cityOwner: Array.from(f.cityOwner),
     })),
+    productionRate: [state.productionRate[0], state.productionRate[1]],
   };
 }
 
@@ -84,6 +87,7 @@ export function deserializeGame(data: SaveData): GameState {
     currentPlayer: data.currentPlayer,
     winner: data.winner,
     pendingEvents: [[], []],
+    productionRate: data.productionRate ?? [1, 1],
     rng,
   };
   refreshAllFog(state);

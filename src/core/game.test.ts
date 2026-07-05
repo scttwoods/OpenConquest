@@ -67,6 +67,25 @@ describe('production', () => {
     expect(built.owner).toBe(0);
   });
 
+  it('difficulty handicap: a higher production rate builds faster', () => {
+    const state = makeTestState();
+    state.productionRate = [1, 2]; // player 1 (the "computer") builds 2x
+    const cityP1 = state.world.starts[1];
+    applyCommand(state, 0, { type: 'endTurn' }); // hand the turn to player 1
+    expect(applyCommand(state, 1, { type: 'setProduction', cityId: cityP1, unit: 'army' }).ok).toBe(
+      true,
+    );
+
+    const before = state.units.size;
+    // At rate 2, an Army (buildTime 5) should appear within 3 of player 1's turns.
+    for (let i = 0; i < 3; i++) {
+      applyCommand(state, 1, { type: 'endTurn' });
+      applyCommand(state, 0, { type: 'endTurn' });
+    }
+    expect(state.units.size).toBe(before + 1);
+    expect([...state.units.values()][0]!.owner).toBe(1);
+  });
+
   it('rejects ships in inland cities and enemy cities', () => {
     const state = makeTestState();
     // City A at (2,2) is 4+ tiles from sea (rows 6+) → inland.

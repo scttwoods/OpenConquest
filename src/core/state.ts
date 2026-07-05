@@ -70,6 +70,12 @@ export interface GameState {
   winner: PlayerId | null;
   /** Events not yet delivered to each player's view. */
   pendingEvents: [GameEvent[], GameEvent[]];
+  /**
+   * Per-player production speed multiplier (a difficulty handicap). 1 is
+   * normal; the vs-Computer mode gives the AI >1 on Hard, <1 on Easy. Always
+   * [1, 1] in PvP. Cities build in buildTime / rate turns.
+   */
+  productionRate: [number, number];
   /** RNG for everything after worldgen (combat rolls, etc.). */
   rng: Rng;
 }
@@ -189,7 +195,11 @@ export function playersSeeing(state: GameState, x: number, y: number): PlayerId[
   return result;
 }
 
-export function createGame(seed: number, sizeKey: MapSizeKey): GameState {
+export function createGame(
+  seed: number,
+  sizeKey: MapSizeKey,
+  productionRate: [number, number] = [1, 1],
+): GameState {
   const size = MAP_SIZES[sizeKey];
   const rng = createRng(seed);
   const world = generateWorld(rng, {
@@ -215,6 +225,7 @@ export function createGame(seed: number, sizeKey: MapSizeKey): GameState {
     currentPlayer: 0,
     winner: null,
     pendingEvents: [[], []],
+    productionRate: [productionRate[0], productionRate[1]],
     rng,
   };
   refreshAllFog(state);

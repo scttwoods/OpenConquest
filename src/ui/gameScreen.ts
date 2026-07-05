@@ -124,19 +124,25 @@ export function createGameScreen(
   let measureTarget: { x: number; y: number } | null = null;
   let holdTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // The map is inset below the top menu bar so nothing renders under it. The
-  // reserved strip is the HUD's occupied height plus a small margin; 0 when the
-  // HUD is hidden. All camera math and pointer→tile mapping use this inset.
+  // The map is inset below the top menu bar and above the bottom unit panel so
+  // nothing renders under either — units near an edge stay fully visible. All
+  // camera math and pointer→tile mapping use these insets. Both are 0 when the
+  // HUD is hidden (title screen).
   const FRAME_GREY = '#4c525a'; // matches the renderer's off-map surround
+  const RESERVED_BOTTOM = 60; // clears the Sleep/Skip unit panel at bottom-left
   function topInset(): number {
     if (hud.classList.contains('hidden')) return 0;
     return Math.round(hud.getBoundingClientRect().bottom + 8);
   }
+  function bottomInset(): number {
+    return hud.classList.contains('hidden') ? 0 : RESERVED_BOTTOM;
+  }
 
-  // Effective viewport: the drawable map area below the top menu bar.
+  // Effective viewport: the drawable map area between the top menu and the
+  // bottom unit panel.
   const viewSize = (): { w: number; h: number } => ({
     w: canvas.clientWidth,
-    h: Math.max(1, canvas.clientHeight - topInset()),
+    h: Math.max(1, canvas.clientHeight - topInset() - bottomInset()),
   });
 
   function selectedUnit(): ViewUnit | undefined {
@@ -181,10 +187,13 @@ export function createGameScreen(
     }
     ctx.restore();
 
-    // Clear the reserved strip so no map ever shows under the menu bar.
-    if (top > 0) {
+    // Clear the reserved strips so no map ever shows under the top menu bar or
+    // the bottom unit panel.
+    if (top > 0 || bottomInset() > 0) {
       ctx.fillStyle = FRAME_GREY;
-      ctx.fillRect(0, 0, fullW, top);
+      if (top > 0) ctx.fillRect(0, 0, fullW, top);
+      const bottom = bottomInset();
+      if (bottom > 0) ctx.fillRect(0, top + h, fullW, fullH - (top + h));
     }
 
     const mctx = minimapCanvas.getContext('2d');
