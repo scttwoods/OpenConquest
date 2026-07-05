@@ -205,6 +205,7 @@
         <button id="btn-end-turn" type="button">End Turn</button>
         <button id="btn-auto" type="button">Auto: On</button>
         <button id="btn-map" type="button">Map</button>
+        <button id="btn-chat" type="button" class="hidden">Chat</button>
         <button id="btn-mute" type="button">Sound</button>
         <button id="btn-menu" type="button">Menu</button>
       </div>
@@ -234,7 +235,12 @@
       </div>
 
       <div id="chat-window" class="mac-window hidden">
-        <div class="title-bar"><span class="title-bar-text">Chat</span></div>
+        <div class="title-bar">
+          <button id="btn-chat-close" type="button" class="close-box" aria-label="Hide chat">
+            ×
+          </button>
+          <span class="title-bar-text">Chat</span>
+        </div>
         <div id="chat-log"></div>
         <input id="chat-input" type="text" placeholder="message…" autocomplete="off" />
       </div>

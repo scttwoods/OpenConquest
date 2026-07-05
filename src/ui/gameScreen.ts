@@ -1285,8 +1285,9 @@ export function createGameScreen(
     'keydown',
     (e) => {
       if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+        // Don't echo locally — the server broadcasts to both players (including
+        // us), and onChat renders that copy. Appending here too would double it.
         session.sendChat(chatInput.value.trim());
-        appendChat('You', chatInput.value.trim());
         chatInput.value = '';
       }
       e.stopPropagation();

@@ -64,6 +64,8 @@ function enterGame(session: Session, opponentLabel: string, showChat: boolean): 
   hud.classList.remove('hidden');
   minimapWindow.classList.remove('hidden');
   chatWindow.classList.toggle('hidden', !showChat);
+  // The Chat toggle only appears in PvP games (where chat exists).
+  document.getElementById('btn-chat')?.classList.toggle('hidden', !showChat);
   updateMuteLabel();
 
   screen = createGameScreen(session, (p) => (p === session.you ? 'You' : opponentLabel), {
@@ -253,6 +255,14 @@ document.getElementById('btn-map')?.addEventListener('click', () => {
 });
 document.getElementById('btn-minimap-close')?.addEventListener('click', () => {
   minimapWindow.classList.add('hidden');
+});
+
+// Chat window show/hide (PvP only).
+document.getElementById('btn-chat')?.addEventListener('click', () => {
+  chatWindow.classList.toggle('hidden');
+});
+document.getElementById('btn-chat-close')?.addEventListener('click', () => {
+  chatWindow.classList.add('hidden');
 });
 
 window.addEventListener('resize', () => {
