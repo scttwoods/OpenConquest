@@ -429,6 +429,10 @@ fieldset.field legend {
   border-radius: 6px;
 }
 
+.stack-row.build-row {
+  border-style: dashed;
+}
+
 .stack-row .info {
   flex: 1 1 auto;
   min-width: 0;

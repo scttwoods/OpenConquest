@@ -80,8 +80,11 @@ export function createGameScreen(
   const unitPanelActions = el<HTMLSpanElement>('unit-panel-actions');
   const btnCancelMove = el<HTMLButtonElement>('btn-cancel-move');
   const btnLoad = el<HTMLButtonElement>('btn-load');
+  const btnPatrol = el<HTMLButtonElement>('btn-patrol');
   const btnSleep = el<HTMLButtonElement>('btn-sleep');
   const btnSkip = el<HTMLButtonElement>('btn-skip');
+  const btnPatrolSet = el<HTMLButtonElement>('btn-patrol-set');
+  const btnPatrolCancel = el<HTMLButtonElement>('btn-patrol-cancel');
   const toasts = el<HTMLDivElement>('toasts');
   const productionDialog = el<HTMLDivElement>('production-dialog');
   const productionTitle = el<HTMLSpanElement>('production-title');
@@ -224,10 +227,21 @@ export function createGameScreen(
     if (patrolDraft !== null) {
       unitPanel.classList.remove('hidden');
       const n = patrolDraft.length;
-      unitPanelText.textContent =
-        `Setting patrol — click waypoints (${n} set), ` + `Enter to confirm, Esc to cancel.`;
+      unitPanelText.textContent = `Setting patrol — tap ${n === 0 ? 'waypoints' : `${n} set`} on the map`;
+      // Show only the Set/Cancel patrol controls while planning.
+      unitPanelActions.style.display = 'flex';
+      btnCancelMove.classList.add('hidden');
+      btnLoad.classList.add('hidden');
+      btnPatrol.classList.add('hidden');
+      btnSleep.classList.add('hidden');
+      btnSkip.classList.add('hidden');
+      btnPatrolSet.classList.remove('hidden');
+      btnPatrolSet.disabled = n === 0;
+      btnPatrolCancel.classList.remove('hidden');
       return;
     }
+    btnPatrolSet.classList.add('hidden');
+    btnPatrolCancel.classList.add('hidden');
 
     const unit = selectedUnit();
     if (unit === undefined) {
@@ -255,6 +269,8 @@ export function createGameScreen(
       btnCancelMove.classList.toggle('hidden', !(myTurn() && hasPlan));
       // Load only for a transport/carrier with loadable units on its tile.
       btnLoad.classList.toggle('hidden', !(myTurn() && hasMoves && loadableFor(unit).length > 0));
+      // Patrol needs a unit that can move and isn't riding a transport.
+      btnPatrol.classList.toggle('hidden', !(myTurn() && hasMoves));
       // Sleep/Skip only make sense for a unit that can still act.
       btnSleep.classList.toggle('hidden', !(myTurn() && hasMoves));
       btnSkip.classList.toggle('hidden', !(myTurn() && hasMoves));
@@ -498,6 +514,40 @@ export function createGameScreen(
     swallowNextClick();
     stackTitle.textContent = `${units.length} Units Here`;
     stackList.innerHTML = '';
+
+    // If this tile is one of your cities, offer its production menu — otherwise
+    // a garrisoned city is unreachable (tapping it always opens this stack).
+    const first = units[0] as ViewUnit;
+    const cityHere = view?.yourCities.find((c) => c.x === first.x && c.y === first.y);
+    if (cityHere !== undefined) {
+      const build = document.createElement('button');
+      build.className = 'stack-row build-row';
+      build.type = 'button';
+      const glyph = document.createElement('span');
+      glyph.className = 'glyph';
+      glyph.style.background = '#8e8e8e';
+      glyph.textContent = '⚒';
+      const info = document.createElement('span');
+      info.className = 'info';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = 'Build units here…';
+      const status = document.createElement('div');
+      status.className = 'status';
+      const prod = cityHere.production;
+      status.textContent =
+        prod === null
+          ? 'City — choose what to produce'
+          : `Building ${UNIT_SPECS[prod.type].name} (${Math.floor(prod.progress)}/${UNIT_SPECS[prod.type].buildTime})`;
+      info.append(name, status);
+      build.append(glyph, info);
+      build.addEventListener('click', () => {
+        stackDialog.classList.add('hidden');
+        openProduction(cityHere.id);
+      });
+      stackList.appendChild(build);
+    }
+
     for (const u of units) {
       const spec = UNIT_SPECS[u.type];
       const row = document.createElement('button');
@@ -733,7 +783,7 @@ export function createGameScreen(
     const unit = selectedUnit();
     if (unit === undefined || !myTurn() || unit.aboard !== null) return;
     patrolDraft = [];
-    toast('Click waypoints, then press Enter to set the patrol.');
+    toast('Tap waypoints on the map, then tap Set Patrol.');
     requestRender();
   }
 
@@ -1154,6 +1204,9 @@ export function createGameScreen(
     },
     { signal },
   );
+  btnPatrol.addEventListener('click', () => beginPatrol(), { signal });
+  btnPatrolSet.addEventListener('click', () => commitPatrol(), { signal });
+  btnPatrolCancel.addEventListener('click', () => cancelPatrol(), { signal });
   btnAuto.addEventListener(
     'click',
     () => {
