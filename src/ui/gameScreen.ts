@@ -6,6 +6,7 @@ import type { Session } from '../session/session';
 import { createCamera, centerOn, clampCamera, zoomAt, type Camera } from './camera';
 import { renderGame } from './renderer';
 import { minimapToTile, renderMinimap } from './minimap';
+import { analyzeFighterPatrol, loopLength } from './patrol';
 import {
   playBattleLost,
   playBattleWon,
@@ -227,7 +228,22 @@ export function createGameScreen(
     if (patrolDraft !== null) {
       unitPanel.classList.remove('hidden');
       const n = patrolDraft.length;
-      unitPanelText.textContent = `Setting patrol — tap ${n === 0 ? 'waypoints' : `${n} set`} on the map`;
+      let text = 'Setting patrol — tap waypoints on the map';
+      const sel = selectedUnit();
+      if (n > 0 && sel !== undefined) {
+        const loop = loopLength([{ x: sel.x, y: sel.y }, ...patrolDraft]);
+        text = `Patrol: ${n} waypoint${n === 1 ? '' : 's'} · loop ${loop} tiles`;
+        // Fighters also get a fuel verdict.
+        const fuel = fighterPatrolAnalysis();
+        if (fuel !== null) {
+          const cap = UNIT_SPECS.fighter.fuel ?? 20;
+          text += ` / fuel ${cap}`;
+          if (fuel.crashes) text += ' · ⚠ too long — will run out of fuel!';
+          else if (loop < cap * 0.4) text += ' · short — could patrol farther';
+          else text += ' · fits the tank ✓';
+        }
+      }
+      unitPanelText.textContent = text;
       // Show only the Set/Cancel patrol controls while planning.
       unitPanelActions.style.display = 'flex';
       btnCancelMove.classList.add('hidden');
@@ -779,6 +795,34 @@ export function createGameScreen(
   }
 
   // ---------- Patrol planning ----------
+  /** Tiles where a Fighter can refuel: your cities and your carriers. */
+  function fighterRefuelSet(): Set<number> {
+    const set = new Set<number>();
+    if (view === null) return set;
+    for (const c of view.cities) {
+      if (c.owner === view.you) set.add(c.y * view.width + c.x);
+    }
+    for (const u of view.units) {
+      if (u.owner === view.you && u.type === 'carrier') set.add(u.y * view.width + u.x);
+    }
+    return set;
+  }
+
+  /** Analyze the fighter patrol currently being drafted (anchor + waypoints). */
+  function fighterPatrolAnalysis(): ReturnType<typeof analyzeFighterPatrol> | null {
+    const unit = selectedUnit();
+    if (view === null || unit === undefined || unit.type !== 'fighter' || patrolDraft === null) {
+      return null;
+    }
+    const bases = fighterRefuelSet();
+    const w = view.width;
+    return analyzeFighterPatrol(
+      [{ x: unit.x, y: unit.y }, ...patrolDraft],
+      UNIT_SPECS.fighter.fuel ?? 20,
+      (x, y) => bases.has(y * w + x),
+    );
+  }
+
   function beginPatrol(): void {
     const unit = selectedUnit();
     if (unit === undefined || !myTurn() || unit.aboard !== null) return;
@@ -790,6 +834,18 @@ export function createGameScreen(
   function commitPatrol(): void {
     const unit = selectedUnit();
     if (patrolDraft !== null && unit !== undefined && patrolDraft.length > 0) {
+      // Warn before committing a fighter to a patrol it can't fuel.
+      const fuel = fighterPatrolAnalysis();
+      if (
+        fuel !== null &&
+        fuel.crashes &&
+        !confirm(
+          `This patrol loops ${fuel.loop} tiles but the Fighter's tank holds ${UNIT_SPECS.fighter.fuel}. ` +
+            `It will run out of fuel and crash before finishing a lap. Set it anyway?`,
+        )
+      ) {
+        return; // keep planning
+      }
       session.send({ type: 'order', unitId: unit.id, order: { patrol: patrolDraft } });
       selectedId = null;
     }
