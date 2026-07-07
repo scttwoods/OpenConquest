@@ -130,6 +130,12 @@ export function createGameScreen(
   let measureAnchor: { x: number; y: number } | null = null;
   let measureTarget: { x: number; y: number } | null = null;
   let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  // Desktop grab-and-drag: dragging from one of your own on-surface units
+  // measures live and, on release, sends it to the drop tile. measureUnit is the
+  // stat source (fuel/turns) for the readout while dragging, so we don't have to
+  // mutate the selection mid-gesture.
+  let planningMoveUnitId: number | null = null;
+  let measureUnit: ViewUnit | null = null;
 
   // The map is inset below the top menu bar and above the bottom unit panel so
   // nothing renders under either — units near an edge stay fully visible. All
@@ -791,7 +797,7 @@ export function createGameScreen(
       return;
     }
     const dist = chebyshev(measureAnchor.x, measureAnchor.y, measureTarget.x, measureTarget.y);
-    const anchorUnit = selectedUnit();
+    const anchorUnit = measureUnit ?? selectedUnit();
     let text = `${dist} ${dist === 1 ? 'tile' : 'tiles'}`;
     if (anchorUnit !== undefined && anchorUnit.type === 'fighter') {
       const after = anchorUnit.fuel - dist;
@@ -838,6 +844,7 @@ export function createGameScreen(
     measuring = false;
     measureAnchor = null;
     measureTarget = null;
+    measureUnit = null;
     measureReadout.classList.add('hidden');
     requestRender();
   }
@@ -1040,14 +1047,40 @@ export function createGameScreen(
         dragMoved = false;
         lastX = e.clientX;
         lastY = e.clientY;
-        // Hold in place (no drag) to start the measuring ruler.
-        const { clientX, clientY } = e;
-        holdTimer = setTimeout(() => {
-          holdTimer = null;
-          if (pointers.size === 1 && !dragMoved) startMeasuring(clientX, clientY);
-        }, 240);
+        canvas.style.cursor = 'grabbing';
+        // Grab-and-drag: pressing on one of your own on-surface units starts a
+        // move plan — the ruler tracks the cursor live and release sends it
+        // there. Pressing anywhere else pans (or, held still, measures).
+        const tile = tileFromPointer(e);
+        const here =
+          view !== null && myTurn()
+            ? view.units.filter(
+                (u) =>
+                  u.owner === view!.you && u.aboard === null && u.x === tile.x && u.y === tile.y,
+              )
+            : [];
+        if (here.length > 0) {
+          const unit = here.find((u) => u.id === selectedId) ?? here[0];
+          if (unit !== undefined) {
+            planningMoveUnitId = unit.id;
+            measureUnit = unit;
+            measureAnchor = { x: unit.x, y: unit.y };
+            measureTarget = tile;
+            measuring = true;
+            updateMeasureReadout(e.clientX, e.clientY);
+            requestRender();
+          }
+        } else {
+          // Hold in place (no drag) to start the measuring ruler.
+          const { clientX, clientY } = e;
+          holdTimer = setTimeout(() => {
+            holdTimer = null;
+            if (pointers.size === 1 && !dragMoved) startMeasuring(clientX, clientY);
+          }, 240);
+        }
       } else if (pointers.size === 2) {
         dragMoved = true; // a pinch is never a tap
+        planningMoveUnitId = null; // a second finger cancels a move plan
         pinchDistance = pinchState().distance;
         stopMeasuring(); // a second finger cancels measuring
       }
@@ -1088,6 +1121,14 @@ export function createGameScreen(
         if (measuring) {
           measureTarget = tileFromPointer(e);
           updateMeasureReadout(e.clientX, e.clientY);
+          // A grab-drag past the threshold counts as a real drag, so release
+          // commits the move instead of falling through to a plain tap.
+          if (
+            planningMoveUnitId !== null &&
+            Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY) > 6
+          ) {
+            dragMoved = true;
+          }
           requestRender();
           return;
         }
@@ -1117,9 +1158,27 @@ export function createGameScreen(
       const wasPinching = pointers.size >= 2;
       const wasMeasuring = measuring;
       pointers.delete(e.pointerId);
+      if (pointers.size === 0) canvas.style.cursor = '';
       if (holdTimer !== null) {
         clearTimeout(holdTimer);
         holdTimer = null;
+      }
+      if (planningMoveUnitId !== null) {
+        const to = tileFromPointer(e);
+        const unit = view?.units.find((u) => u.id === planningMoveUnitId);
+        const didDrag = dragMoved;
+        planningMoveUnitId = null;
+        stopMeasuring();
+        if (unit !== undefined && didDrag) {
+          selectedId = unit.id; // keep it selected so its new path draws
+          if (myTurn() && !(to.x === unit.x && to.y === unit.y)) {
+            moveSelected(unit, to, chebyshev(unit.x, unit.y, to.x, to.y) === 1);
+          }
+          requestRender();
+        } else if (!didDrag) {
+          handleClick(e, e.shiftKey); // a plain press-release: select/stack as before
+        }
+        return;
       }
       if (wasMeasuring) {
         if (pointers.size === 0) stopMeasuring();
@@ -1141,6 +1200,8 @@ export function createGameScreen(
     'pointercancel',
     (e) => {
       pointers.delete(e.pointerId);
+      if (pointers.size === 0) canvas.style.cursor = '';
+      planningMoveUnitId = null;
       stopMeasuring();
     },
     { signal },

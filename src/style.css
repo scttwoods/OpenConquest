@@ -45,6 +45,7 @@ textarea {
   height: 100%;
   image-rendering: pixelated;
   touch-action: none; /* the game handles pan/pinch itself */
+  cursor: grab; /* the map (and your units) can be grabbed and dragged */
 }
 
 #minimap {
