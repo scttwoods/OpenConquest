@@ -1,7 +1,13 @@
 import { createRng, seedFromString } from './core/rng';
 import { createGame } from './core/state';
 import { deserializeGame, type SaveData } from './core/save';
-import { DIFFICULTIES, UNIT_SPECS, UNIT_TYPES, type DifficultyKey, type MapSizeKey } from './core/rules';
+import {
+  DIFFICULTIES,
+  UNIT_SPECS,
+  UNIT_TYPES,
+  type DifficultyKey,
+  type MapSizeKey,
+} from './core/rules';
 import { createLocalSession, AUTOSAVE_KEY } from './session/local';
 import { createRemoteSession, savedPvpGame } from './session/remote';
 import type { Session } from './session/session';

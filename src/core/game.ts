@@ -1,6 +1,12 @@
 import { chebyshev, tileIndex } from './grid';
 import { TERRAIN_LAND } from './mapgen';
-import { CITY_CAPTURE_CHANCE, COMBAT_ROUND_CHANCE, UNIT_SPECS, type UnitType } from './rules';
+import {
+  CITY_CAPTURE_CHANCE,
+  COMBAT_ROUND_CHANCE,
+  NEUTRAL_CITY_CAPTURE_CHANCE,
+  UNIT_SPECS,
+  type UnitType,
+} from './rules';
 import { nextStepToward, terrainPassable } from './path';
 import {
   cargoOf,
@@ -193,7 +199,9 @@ function moveStep(
     unit.mode = 'awake';
     unit.dest = null;
     spendMove();
-    if (state.rng.chance(CITY_CAPTURE_CHANCE)) {
+    // Neutral garrisons barely resist; enemy cities are a real assault.
+    const captureChance = cityOwner === NEUTRAL ? NEUTRAL_CITY_CAPTURE_CHANCE : CITY_CAPTURE_CHANCE;
+    if (state.rng.chance(captureChance)) {
       state.cityOwners[cityId] = player;
       state.production[cityId] = null;
       enterTile(state, unit, tx, ty);

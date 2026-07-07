@@ -192,6 +192,7 @@ function drawUnit(
   unit: ViewUnit,
   you: number,
   selected: boolean,
+  awaitingOrders = false,
 ): void {
   const margin = Math.max(1, Math.round(ts * 0.12));
   const size = ts - 2 * margin;
@@ -205,6 +206,42 @@ function drawUnit(
 
   if (ts >= 12) {
     drawSymbol(ctx, unit.type, px + ts / 2, py + ts / 2, size * 0.42);
+  }
+
+  // Status badge (bottom-left) so you can tell at a glance what each of your
+  // pieces is doing: Z sleeping, → en route, P patrolling; a gold dot means
+  // the piece is awake and still awaiting orders this turn.
+  if (unit.owner === you && ts >= 12) {
+    const glyph =
+      unit.mode === 'sentry'
+        ? 'Z'
+        : unit.mode === 'moveto'
+          ? '→'
+          : unit.mode === 'patrol'
+            ? 'P'
+            : null;
+    if (glyph !== null) {
+      const chip = Math.max(7, Math.round(ts * 0.38));
+      ctx.fillStyle = PALETTE.white;
+      ctx.fillRect(px, py + ts - chip, chip, chip);
+      ctx.strokeStyle = PALETTE.outline;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px + 0.5, py + ts - chip + 0.5, chip - 1, chip - 1);
+      ctx.fillStyle = PALETTE.outline;
+      ctx.font = `bold ${chip - 2}px "Courier New", monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(glyph, px + chip / 2, py + ts - chip / 2 + 1);
+    } else if (awaitingOrders) {
+      const r = Math.max(2.5, ts * 0.12);
+      ctx.fillStyle = PALETTE.selection;
+      ctx.strokeStyle = PALETTE.outline;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(px + r + 2, py + ts - r - 2, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
   }
 
   if (unit.cargoCount > 0 && ts >= 14) {
@@ -390,14 +427,15 @@ export function renderGame(
   const sorted = [...view.units].sort(
     (a, b) => Number(a.owner === view.you) - Number(b.owner === view.you),
   );
+  const yourTurn = view.currentPlayer === view.you && view.winner === null;
   for (const unit of sorted) {
     if (unit.aboard !== null) continue;
     if (unit.x < x0 || unit.x > x1 || unit.y < y0 || unit.y > y1) continue;
     const isSel = unit.id === selectedUnitId;
-    const done =
-      unit.owner === view.you && !isSel && !(unit.movesLeft > 0 && unit.mode === 'awake');
+    const ready = unit.movesLeft > 0 && unit.mode === 'awake';
+    const done = unit.owner === view.you && !isSel && !ready;
     ctx.globalAlpha = done ? 0.5 : 1;
-    drawUnit(ctx, screenX(unit.x), screenY(unit.y), ts, unit, view.you, isSel);
+    drawUnit(ctx, screenX(unit.x), screenY(unit.y), ts, unit, view.you, isSel, yourTurn && ready);
     ctx.globalAlpha = 1;
   }
 
@@ -430,9 +468,17 @@ export function renderGame(
     ctx.fillText(`${count}`, px + badge / 2, py + badge / 2 + 1);
   }
 
-  // Patrol routes: the selected unit's active loop, or the one being planned.
+  // Patrol routes: every patrolling unit shows its loop faintly so patrols are
+  // legible at a glance; the selected unit's loop draws at full strength.
   const selected =
     selectedUnitId === null ? undefined : view.units.find((u) => u.id === selectedUnitId);
+  for (const unit of view.units) {
+    if (unit.owner !== view.you || unit.patrolRoute === null || unit.aboard !== null) continue;
+    if (unit.id === selectedUnitId) continue; // drawn solid below
+    ctx.globalAlpha = 0.35;
+    drawRoute(ctx, ts, screenX, screenY, unit.patrolRoute, true);
+    ctx.globalAlpha = 1;
+  }
   if (selected !== undefined && selected.patrolRoute !== null && patrolDraft === null) {
     drawRoute(ctx, ts, screenX, screenY, selected.patrolRoute, true);
   }

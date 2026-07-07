@@ -94,7 +94,13 @@ export function findContinents(
 /**
  * Count land tiles in the 8-neighborhood of (x,y). Out-of-bounds counts as sea.
  */
-function landNeighbors8(terrain: Uint8Array, width: number, height: number, x: number, y: number): number {
+function landNeighbors8(
+  terrain: Uint8Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): number {
   let n = 0;
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
@@ -116,7 +122,13 @@ function landNeighbors8(terrain: Uint8Array, width: number, height: number, x: n
  * while filling one-tile gaps — so no filaments or 1-wide arms survive.
  * Border tiles are forced to sea to keep islands off the map edge.
  */
-function smooth(terrain: Uint8Array, width: number, height: number, mx: number, my: number): Uint8Array {
+function smooth(
+  terrain: Uint8Array,
+  width: number,
+  height: number,
+  mx: number,
+  my: number,
+): Uint8Array {
   const next = new Uint8Array(terrain.length);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {

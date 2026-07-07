@@ -93,6 +93,9 @@ export function createGameScreen(
   const stackDialog = el<HTMLDivElement>('stack-dialog');
   const stackTitle = el<HTMLSpanElement>('stack-title');
   const stackList = el<HTMLDivElement>('stack-list');
+  const forcesDialog = el<HTMLDivElement>('forces-dialog');
+  const forcesTitle = el<HTMLSpanElement>('forces-title');
+  const forcesList = el<HTMLDivElement>('forces-list');
   const loadDialog = el<HTMLDivElement>('load-dialog');
   const loadMessage = el<HTMLParagraphElement>('load-message');
   const victoryOverlay = el<HTMLDivElement>('victory-overlay');
@@ -518,9 +521,11 @@ export function createGameScreen(
     const cargo = cargoLabel(u);
     if (cargo !== null) bits.push(cargo);
     if (u.aboard !== null) bits.push('aboard');
-    if (u.mode === 'sentry') bits.push('sentry');
+    if (u.mode === 'sentry') bits.push('sleeping');
     else if (u.mode === 'moveto') bits.push('moving');
+    else if (u.mode === 'patrol') bits.push('patrolling');
     else if (u.movesLeft === 0) bits.push('done');
+    else bits.push('awaiting orders');
     return bits.join(' · ');
   }
 
@@ -641,6 +646,55 @@ export function createGameScreen(
     } else if (units.length > 1) {
       openStack(units);
     }
+  }
+
+  /** Roster of every unit you own — what it is, where it is, what it's doing. */
+  function openForces(): void {
+    if (view === null) return;
+    swallowNextClick();
+    const mine = view.units
+      .filter((u) => u.owner === view!.you)
+      .sort((a, b) => UNIT_TYPES.indexOf(a.type) - UNIT_TYPES.indexOf(b.type) || a.id - b.id);
+    forcesTitle.textContent = `Your Forces — ${mine.length} unit${mine.length === 1 ? '' : 's'}`;
+    forcesList.innerHTML = '';
+    for (const u of mine) {
+      const s = UNIT_SPECS[u.type];
+      const row = document.createElement('button');
+      row.className = 'stack-row' + (u.id === selectedId ? ' selected' : '');
+      row.type = 'button';
+
+      const glyph = document.createElement('span');
+      glyph.className = 'glyph';
+      glyph.style.background = '#1d50d8';
+      glyph.textContent = s.letter;
+
+      const info = document.createElement('span');
+      info.className = 'info';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = `${s.name} — (${u.x}, ${u.y})`;
+      const status = document.createElement('div');
+      status.className = 'status';
+      status.textContent = unitStatusLine(u);
+      info.append(name, status);
+
+      row.append(glyph, info);
+      row.addEventListener('click', () => {
+        selectedId = u.id;
+        forcesDialog.classList.add('hidden');
+        const { w, h } = viewSize();
+        if (view !== null) centerOn(cam, view, w, h, u.x, u.y);
+        requestRender();
+      });
+      forcesList.appendChild(row);
+    }
+    if (mine.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'status';
+      empty.textContent = 'No units yet — set a city to build something.';
+      forcesList.appendChild(empty);
+    }
+    forcesDialog.classList.remove('hidden');
   }
 
   // When a transport/carrier is ordered off a tile that still holds loose
@@ -1014,7 +1068,15 @@ export function createGameScreen(
           if (ratio > 1.25 || ratio < 0.8) {
             const rect = canvas.getBoundingClientRect();
             const { w, h } = viewSize();
-            zoomAt(cam, view, w, h, ratio > 1 ? 1 : -1, midX - rect.left, midY - rect.top - topInset());
+            zoomAt(
+              cam,
+              view,
+              w,
+              h,
+              ratio > 1 ? 1 : -1,
+              midX - rect.left,
+              midY - rect.top - topInset(),
+            );
             pinchDistance = distance;
             requestRender();
           }
@@ -1100,7 +1162,15 @@ export function createGameScreen(
       if (view === null) return;
       const rect = canvas.getBoundingClientRect();
       const { w, h } = viewSize();
-      zoomAt(cam, view, w, h, e.deltaY < 0 ? 1 : -1, e.clientX - rect.left, e.clientY - rect.top - topInset());
+      zoomAt(
+        cam,
+        view,
+        w,
+        h,
+        e.deltaY < 0 ? 1 : -1,
+        e.clientX - rect.left,
+        e.clientY - rect.top - topInset(),
+      );
       requestRender();
     },
     { signal, passive: false },
@@ -1302,6 +1372,12 @@ export function createGameScreen(
     () => stackDialog.classList.add('hidden'),
     { signal },
   );
+  el<HTMLButtonElement>('btn-forces').addEventListener('click', () => openForces(), { signal });
+  el<HTMLButtonElement>('btn-close-forces').addEventListener(
+    'click',
+    () => forcesDialog.classList.add('hidden'),
+    { signal },
+  );
   el<HTMLButtonElement>('btn-load-take').addEventListener(
     'click',
     () => {
@@ -1423,6 +1499,7 @@ export function createGameScreen(
       unitPanel.classList.add('hidden');
       productionDialog.classList.add('hidden');
       stackDialog.classList.add('hidden');
+      forcesDialog.classList.add('hidden');
       loadDialog.classList.add('hidden');
       victoryOverlay.classList.add('hidden');
       chatWindow.classList.add('hidden');

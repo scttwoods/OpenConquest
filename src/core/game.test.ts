@@ -277,6 +277,28 @@ describe('city capture', () => {
         expect(state.cityOwners[cityId]).toBe(NEUTRAL);
       }
     }
+    // Neutral cities fall ~90% of the time — the opening land-grab is forgiving.
+    expect(captures).toBeGreaterThan(30);
+    expect(captures).toBeLessThanOrEqual(40);
+  });
+
+  it('assaulting an ENEMY city stays a roughly even fight', () => {
+    let captures = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const state = makeTestState();
+      state.rng.setState(seed * 104729);
+      // starts[1] is owned by player 1 — attack it directly.
+      const cityId = state.world.starts[1];
+      const city = state.world.cities[cityId]!;
+      const army = spawnUnit(state, 'army', 0, city.x - 1, city.y);
+      army.movesLeft = 1;
+      expect(
+        applyCommand(state, 0, { type: 'move', unitId: army.id, to: { x: city.x, y: city.y } }).ok,
+      ).toBe(true);
+      if (state.cityOwners[cityId] === 0) captures++;
+      else expect(state.units.has(army.id)).toBe(false);
+    }
+    // Enemy cities keep the classic ~50% assault odds.
     expect(captures).toBeGreaterThan(8);
     expect(captures).toBeLessThan(32);
   });

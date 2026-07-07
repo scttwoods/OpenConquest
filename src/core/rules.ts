@@ -39,8 +39,14 @@ export const MIN_CITY_CONTINENT = 15;
 /** Vision radius (Chebyshev) granted by a city. */
 export const VISION_CITY = 2;
 
-/** Chance an army's assault on a city succeeds (per attempt). */
+/** Chance an army's assault on an ENEMY city succeeds (per attempt). */
 export const CITY_CAPTURE_CHANCE = 0.5;
+
+/**
+ * Chance of taking a NEUTRAL city. Near-certain so the opening land-grab
+ * isn't a coin flip that eats your first armies.
+ */
+export const NEUTRAL_CITY_CAPTURE_CHANCE = 0.9;
 
 /** Chance the attacker wins each combat round. */
 export const COMBAT_ROUND_CHANCE = 0.5;
@@ -84,7 +90,7 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     domain: 'land',
     moves: 1,
     hits: 1,
-    buildTime: 5,
+    buildTime: 4,
     vision: 1,
     damage: 1,
   },
@@ -96,7 +102,7 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     // before it must land at a city or Carrier to refuel (or it crashes).
     moves: 10,
     hits: 1,
-    buildTime: 8,
+    buildTime: 6,
     vision: 2,
     damage: 1,
     fuel: 20,
@@ -107,7 +113,7 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     domain: 'sea',
     moves: 2,
     hits: 1,
-    buildTime: 15,
+    buildTime: 8,
     vision: 1,
     damage: 1,
     capacity: { type: 'army', count: 6 },
@@ -120,7 +126,7 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     // 2 hits: a proper escort that can trade with a transport or sub and live,
     // not a paper boat that dies to the first unlucky roll.
     hits: 2,
-    buildTime: 15,
+    buildTime: 10,
     vision: 1,
     damage: 1,
   },
@@ -130,7 +136,7 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     domain: 'sea',
     moves: 2,
     hits: 1,
-    buildTime: 18,
+    buildTime: 12,
     vision: 1,
     damage: 2,
   },
@@ -140,7 +146,7 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     domain: 'sea',
     moves: 2,
     hits: 2,
-    buildTime: 30,
+    buildTime: 16,
     vision: 1,
     damage: 1,
   },
@@ -150,7 +156,7 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     domain: 'sea',
     moves: 2,
     hits: 2,
-    buildTime: 36,
+    buildTime: 20,
     vision: 1,
     damage: 1,
     capacity: { type: 'fighter', count: 8 },
@@ -161,7 +167,7 @@ export const UNIT_SPECS: Record<UnitType, UnitSpec> = {
     domain: 'sea',
     moves: 2,
     hits: 3,
-    buildTime: 45,
+    buildTime: 24,
     vision: 1,
     damage: 1,
   },

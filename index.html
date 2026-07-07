@@ -113,12 +113,13 @@
               badge). Press and <b>hold</b> anywhere to measure distance — handy for checking
               whether a Fighter can reach a target and still return. To change a plan, select the
               unit and tap a new destination, or tap <b>Cancel Move</b> to stop it. Units that have
-              finished acting this turn are dimmed. Armies capture cities (about half of assaults
-              succeed), and capturing one prompts you to choose what it builds. Fighters fly
-              anywhere but must refuel at cities or Carriers. To ship Armies across the sea, put
-              them in a coastal city with a Transport, select the Transport and tap <b>Load</b> (or
-              use <b>Board</b> in the stack panel), then sail. When several units share a tile it
-              shows a count badge — tap it to open a panel listing each unit's state and pick one. A
+              finished acting this turn are dimmed. Armies capture cities — neutral cities almost
+              always fall, while assaulting an enemy city succeeds about half the time — and
+              capturing one prompts you to choose what it builds. Fighters fly anywhere but must
+              refuel at cities or Carriers. To ship Armies across the sea, put them in a coastal
+              city with a Transport, select the Transport and tap <b>Load</b> (or use
+              <b>Board</b> in the stack panel), then sail. When several units share a tile it shows
+              a count badge — tap it to open a panel listing each unit's state and pick one. A
               little roof marker in a tile's corner means a city sits underneath.
             </p>
             <div class="help-table-wrap">
@@ -130,8 +131,13 @@
               <b>hold</b> measure · drag/arrows pan · wheel or pinch zoom · tap minimap to jump
             </p>
             <p class="help-keys">
-              <b>Patrol:</b> select a unit, press <b>p</b>, click waypoints along the route,
-              then <b>Enter</b>. It loops the route until it spots an enemy or you give a new order.
+              <b>Patrol:</b> select a unit, press <b>p</b>, click waypoints along the route, then
+              <b>Enter</b>. It loops the route until it spots an enemy or you give a new order.
+            </p>
+            <p class="help-keys">
+              <b>Unit badges:</b> each of your pieces wears its orders — <b>Z</b> sleeping ·
+              <b>→</b> moving · <b>P</b> patrolling · <b>gold dot</b> awaiting orders. The
+              <b>Forces</b> button lists every unit you own; tap one to jump to it.
             </p>
             <p class="help-keys">
               <b>Auto: On</b> skips turns where nothing needs orders — the game fast-forwards to
@@ -158,6 +164,20 @@
         </div>
       </div>
 
+      <div id="forces-dialog" class="hidden">
+        <div class="mac-window">
+          <div class="title-bar">
+            <span class="title-bar-text" id="forces-title">Your Forces</span>
+          </div>
+          <div class="dialog-body">
+            <div id="forces-list" class="stack-list"></div>
+            <div class="dialog-actions">
+              <button id="btn-close-forces" type="button" class="default-btn">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="load-dialog" class="hidden">
         <div class="mac-window">
           <div class="title-bar"><span class="title-bar-text">Leaving Port</span></div>
@@ -176,7 +196,14 @@
         <div class="mac-window">
           <div class="title-bar">
             <span class="title-bar-text" id="production-title">City</span>
-            <button id="btn-production-help" type="button" class="help-box" title="Compare all units">?</button>
+            <button
+              id="btn-production-help"
+              type="button"
+              class="help-box"
+              title="Compare all units"
+            >
+              ?
+            </button>
           </div>
           <div class="dialog-body">
             <div id="production-list" class="production-list"></div>
@@ -204,6 +231,7 @@
         <button id="btn-next-unit" type="button">Next Unit</button>
         <button id="btn-end-turn" type="button">End Turn</button>
         <button id="btn-auto" type="button">Auto: On</button>
+        <button id="btn-forces" type="button">Forces</button>
         <button id="btn-map" type="button">Map</button>
         <button id="btn-chat" type="button" class="hidden">Chat</button>
         <button id="btn-mute" type="button">Sound</button>
