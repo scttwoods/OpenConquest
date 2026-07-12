@@ -315,6 +315,7 @@ export function renderGame(
   selectedUnitId: number | null,
   patrolDraft: { x: number; y: number }[] | null = null,
   draftAnchor: { x: number; y: number } | null = null,
+  highlightCity: { x: number; y: number } | null = null,
 ): void {
   const ts = cam.tileSize;
   ctx.fillStyle = '#000';
@@ -360,6 +361,21 @@ export function renderGame(
   for (const city of view.cities) {
     if (city.x < x0 || city.x > x1 || city.y < y0 || city.y > y1) continue;
     drawCity(ctx, screenX(city.x), screenY(city.y), ts, city.owner, view.you);
+  }
+
+  // Ring a city the game is asking you to give production orders.
+  if (highlightCity !== null) {
+    const px = screenX(highlightCity.x);
+    const py = screenY(highlightCity.y);
+    const m = Math.max(2, Math.round(ts / 8));
+    ctx.save();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = Math.max(3, Math.round(ts / 6));
+    ctx.strokeRect(px - m, py - m, ts + 2 * m, ts + 2 * m);
+    ctx.strokeStyle = PALETTE.selection;
+    ctx.lineWidth = Math.max(1.5, Math.round(ts / 12));
+    ctx.strokeRect(px - m, py - m, ts + 2 * m, ts + 2 * m);
+    ctx.restore();
   }
 
   // Dim what is remembered but not currently visible (stale intel) — done

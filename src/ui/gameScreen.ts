@@ -107,6 +107,9 @@ export function createGameScreen(
   const cam: Camera = createCamera();
   let view: PlayerView | null = null;
   let selectedId: number | null = null;
+  // A city the game is asking you to give production orders (via Next Unit when
+  // no unit needs orders); drawn with a highlight ring until you choose.
+  let highlightCity: { x: number; y: number } | null = null;
   let raf = 0;
   let centeredOnce = false;
   /** When defining a patrol, the waypoints clicked so far; null when not. */
@@ -194,7 +197,8 @@ export function createGameScreen(
     ctx.rect(0, top, w, h);
     ctx.clip();
     ctx.translate(0, top);
-    renderGame(ctx, view, cam, w, h, selectedId, patrolDraft, draftAnchor);
+    const ring = productionDialog.classList.contains('hidden') ? null : highlightCity;
+    renderGame(ctx, view, cam, w, h, selectedId, patrolDraft, draftAnchor, ring);
     if (measuring && measureAnchor !== null && measureTarget !== null) {
       drawMeasureLine(ctx, measureAnchor, measureTarget);
     }
@@ -416,9 +420,29 @@ export function createGameScreen(
     }, 150);
   }
 
+  /** Center on a city, ring it, and open its production menu. */
+  function focusCityForProduction(city: { id: number; x: number; y: number }): void {
+    if (view === null) return;
+    selectedId = null;
+    const { w, h } = viewSize();
+    centerOn(cam, view, w, h, city.x, city.y);
+    openProduction(city.id); // clears any previous highlight…
+    highlightCity = { x: city.x, y: city.y }; // …then ring this one
+    requestRender();
+  }
+
   function selectNextUnit(): void {
+    highlightCity = null;
     const units = actionable();
     if (units.length === 0) {
+      // No unit wants orders — the likely reason Next Unit "found nothing" is a
+      // city still idling without a production choice. Jump to the first such
+      // city, highlight it, and open its build menu.
+      const idleCity = view?.yourCities.find((c) => c.production === null);
+      if (idleCity !== undefined) {
+        focusCityForProduction(idleCity);
+        return;
+      }
       selectedId = null;
       requestRender();
       return;
@@ -479,6 +503,7 @@ export function createGameScreen(
     if (view === null) return;
     const city = view.yourCities.find((c) => c.id === cityId);
     if (city === undefined) return;
+    highlightCity = null; // only the Next-Unit focus flow re-sets this after
     swallowNextClick();
     productionCityId = cityId;
     productionTitle.textContent = city.coastal ? 'City (port)' : 'City (inland)';

@@ -8,7 +8,7 @@ export interface Camera {
   tileSize: number;
 }
 
-export const ZOOM_LEVELS = [6, 8, 12, 16, 24, 32] as const;
+export const ZOOM_LEVELS = [6, 8, 12, 16, 24, 32, 48, 64] as const;
 export const DEFAULT_TILE_SIZE = 16;
 
 export function createCamera(): Camera {
