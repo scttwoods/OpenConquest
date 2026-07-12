@@ -438,6 +438,33 @@ describe('fighters', () => {
     expect(state.units.has(fighter.id)).toBe(true);
     expect(fighter.fuel).toBe(UNIT_SPECS.fighter.fuel);
   });
+
+  it('parked in the open, a fighter burns a unit of fuel each turn and crashes when dry', () => {
+    const state = makeTestState();
+    const fighter = spawnUnit(state, 'fighter', 0, 5, 5); // open ground, no base
+    fighter.movesLeft = UNIT_SPECS.fighter.moves; // as if it just had its upkeep
+    fighter.fuel = 3;
+    // It never moves, so ending player 0's turn burns one loiter unit of fuel.
+    applyCommand(state, 0, { type: 'endTurn' });
+    expect(fighter.fuel).toBe(2);
+    // The other player's turn doesn't touch it.
+    applyCommand(state, 1, { type: 'endTurn' });
+    expect(fighter.fuel).toBe(2);
+    applyCommand(state, 0, { type: 'endTurn' }); // 2 -> 1
+    applyCommand(state, 1, { type: 'endTurn' });
+    expect(state.units.has(fighter.id)).toBe(true);
+    applyCommand(state, 0, { type: 'endTurn' }); // 1 -> 0 → crashes
+    expect(state.units.has(fighter.id)).toBe(false);
+  });
+
+  it('parked in a friendly city, a fighter burns no loiter fuel', () => {
+    const state = makeTestState();
+    const city = state.world.cities[state.world.starts[0]]!; // (2,2), player 0's
+    const fighter = spawnUnit(state, 'fighter', 0, city.x, city.y);
+    fighter.fuel = 5;
+    applyCommand(state, 0, { type: 'endTurn' });
+    expect(fighter.fuel).toBe(5); // safe at base — not drained
+  });
 });
 
 describe('patrol', () => {

@@ -467,6 +467,28 @@ function checkVictory(state: GameState): void {
   }
 }
 
+/**
+ * A fighter that spends a whole turn aloft outside a city or Carrier burns a
+ * unit of fuel even if it never moves — it can't loiter over open ground
+ * forever. Fighters that did move already paid per tile, so they're skipped;
+ * this only charges the ones that sat still (parked/sentry). Runs at end of
+ * turn, just before the stranded-fighter crash check, so a plane that runs its
+ * tank dry loitering goes down the same turn.
+ */
+function burnLoiterFuel(state: GameState, player: PlayerId): void {
+  const fullMoves = spec('fighter').moves;
+  for (const unit of state.units.values()) {
+    if (
+      unit.owner === player &&
+      unit.type === 'fighter' &&
+      unit.movesLeft === fullMoves && // never moved this turn
+      !isBased(state, unit)
+    ) {
+      unit.fuel--;
+    }
+  }
+}
+
 /** Fighters caught in the open with dry tanks at end of turn go down. */
 function crashStrandedFighters(state: GameState, player: PlayerId): void {
   for (const unit of [...state.units.values()]) {
@@ -586,6 +608,7 @@ export function applyCommand(state: GameState, player: PlayerId, command: Comman
     case 'endTurn': {
       // Units under standing move orders travel now, as the turn closes.
       executeStandingOrders(state, player);
+      burnLoiterFuel(state, player);
       crashStrandedFighters(state, player);
       checkVictory(state);
       if (state.winner !== null) return OK;
