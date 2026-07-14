@@ -18,6 +18,7 @@ export const PALETTE = {
   landSpeckle: '#4c8f42',
   coast: '#20431c',
   fogRemembered: 'rgba(0, 0, 30, 0.32)',
+  grid: 'rgba(0, 0, 0, 0.28)',
   you: '#1d50d8',
   enemy: '#cf2222',
   neutral: '#8e8e8e',
@@ -356,6 +357,29 @@ export function renderGame(
         if (seaAt(x + 1, y)) ctx.fillRect(px + ts - edge, py, edge, ts);
       }
     }
+  }
+
+  // Tile grid: crisp hairlines on the tile boundaries so distances read at a
+  // glance. Skipped at the smallest zooms where it would drown the terrain.
+  if (ts >= 12) {
+    ctx.strokeStyle = PALETTE.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const gy0 = screenY(y0);
+    const gy1 = screenY(y1 + 1);
+    const gx0 = screenX(x0);
+    const gx1 = screenX(x1 + 1);
+    for (let x = x0; x <= x1 + 1; x++) {
+      const px = screenX(x) + 0.5;
+      ctx.moveTo(px, gy0);
+      ctx.lineTo(px, gy1);
+    }
+    for (let y = y0; y <= y1 + 1; y++) {
+      const py = screenY(y) + 0.5;
+      ctx.moveTo(gx0, py);
+      ctx.lineTo(gx1, py);
+    }
+    ctx.stroke();
   }
 
   for (const city of view.cities) {
